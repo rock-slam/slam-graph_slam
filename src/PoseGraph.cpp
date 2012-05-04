@@ -79,93 +79,6 @@ Eigen::Matrix<double,6,6> hogmanCov2EnvireCov( const Matrix6& hogman_matrix )
     return t1;
 }
 
-/** helper struct that caches some information on the structure of the map
- * graph and associated information (e.g. bounding box).
- */
-struct SensorMaps
-{
-    explicit SensorMaps( envire::FrameNode* a )
-	: stereoMap(NULL), sparseMap(NULL), frameNode( a )
-    {
-	// go through all the maps in the framenode and see if they fit a sensor map 
-	std::list<envire::CartesianMap*> la = a->getMaps();
-	for( std::list<envire::CartesianMap*>::iterator it = la.begin();
-		it != la.end(); it ++ )
-	{
-	    if( (*it)->getLabel() == "dense" )
-		stereoMap = dynamic_cast<envire::Pointcloud*>( *it );
-	    else if( (*it)->getLabel() == "sparse" )
-		sparseMap = dynamic_cast<envire::Featurecloud*>( *it );
-	}
-    }
-
-    // update the bounds of the map using the uncertainty 
-    // associated with the framenode 
-    void updateBounds( double sigma = 3.0 )
-    {
-	// get the extents from the individual maps first
-	if( extents.isEmpty() )
-	{
-	    // cache the extends, since they won't change 
-	    // locally
-	    if( stereoMap )
-		extents.extend( stereoMap->getExtents() );
-	    if( sparseMap )
-		extents.extend( sparseMap->getExtents() );
-	}
-
-	// the strategy is now to take the corner points, 
-	// and transform them including the uncertainty 
-	// provided. These points should all be included
-	// in the final bounds and should roughly provide
-	// the bounding box for the map including uncertainty
-
-	// reset the bounds
-	bounds.setEmpty();
-
-	// go through all 8 corners of the extents
-	for( int i=0; i<8; i++ )
-	{
-	    Eigen::Vector3d corner;
-	    for( int j=0; j<3; j++ )
-		corner[j] = (i>>j)&1 ? extents.min()[j] : extents.max()[j];
-
-	    // Transform the points with uncertainty
-	    envire::PointWithUncertainty uncertain_corner = 
-		frameNode->getTransformWithUncertainty() * envire::PointWithUncertainty(corner);
-
-	    // do a cholesky decomposition of the covariance matrix
-	    // in order to get the sigma points
-	    Eigen::LLT<Eigen::Matrix3d> llt;
-	    llt.compute( uncertain_corner.getCovariance() );
-	    Eigen::Matrix3d sigma_points = llt.matrixL();
-
-	    // extend the bounds by the sigma points
-	    for( int j=0; j<3; j++ )
-	    {
-		bounds.extend( 
-			uncertain_corner.getPoint() + sigma_points.col(j) );
-		bounds.extend( 
-			uncertain_corner.getPoint() - sigma_points.col(j) );
-	    }
-	}
-    }
-
-    envire::Pointcloud *stereoMap;
-    envire::Featurecloud *sparseMap;
-    // add more maps that can be associated here
-
-    // store the frameNode pointer
-    envire::FrameNode *frameNode;
-
-    // cached local bounds
-    Eigen::AlignedBox<double, 3> extents;
-
-    /// The bounding box of the maps in global frame 
-    /// including uncertainty
-    Eigen::AlignedBox<double, 3> bounds;
-};
-
 PoseGraph::PoseGraph( envire::Environment* env, int num_levels, int node_distance ) 
     : max_node_radius( 25.0 ), 
     min_sparse_correspondences( 7 ),
@@ -453,7 +366,7 @@ SensorMaps* PoseGraph::getSensorMaps( envire::FrameNode* fn )
 	return f->second;
 
     // otherwise create a new node
-    SensorMaps* sm = new SensorMaps( fn );
+    SensorMaps* sm = new VisualSensorMaps( fn );
     nodeMap.insert( make_pair( id, sm ) );
 
     // call update bounds once, so we have an initial
@@ -489,118 +402,23 @@ bool PoseGraph::associateNodes( envire::FrameNode* a, envire::FrameNode* b )
     if( sma->bounds.intersection( smb->bounds ).isEmpty() )
 	return false;
 
-    // call the individual association methods
-    if( sma->sparseMap && smb->sparseMap )
+    std::vector<envire::TransformWithUncertainty> constraints;
+    sma->associate( smb, constraints );
+    for( size_t i = 0; i < constraints.size(); i++ )
     {
-	if( associateSparseMap( sma->sparseMap, smb->sparseMap ) >= min_sparse_correspondences )
-	{
-	    if( sma->stereoMap && smb->stereoMap )
-		associateStereoMap( sma->stereoMap, smb->stereoMap );
-
-	    return true;
-	}
-	else
-	    return false;
-    }
-    else if( sma->stereoMap && smb->stereoMap )
-    {
-	associateStereoMap( sma->stereoMap, smb->stereoMap );
-	return true;
+	// add the egde to the optimization framework 
+	// this will update an existing edge
+	optimizer->addEdge( 
+		optimizer->vertex( a->getUniqueIdNumericalSuffix() ),
+		optimizer->vertex( b->getUniqueIdNumericalSuffix() ),
+		eigen2Hogman( constraints[i].getTransform() ),
+		envireCov2HogmanInf( constraints[i].getCovariance() )
+		);
     }
 
     // TODO store both successful and unsuccessful associations
     // since it doesn't make sense to try to associate twice
-    return true;
+    return !constraints.empty();
 }
 
-void PoseGraph::associateStereoMap( envire::Pointcloud* pc1, envire::Pointcloud* pc2 ) 
-{
-    // perform an icp fitting of the two pointclouds
-    // given a currently static parameter set
-    envire::icp::ICPConfiguration conf;
-    conf.model_density = 0.01;
-    conf.measurement_density = 0.01;
-    conf.max_iterations = 10;
-    conf.min_mse = 0.005;
-    conf.min_mse_diff = 0.0001;
-    conf.overlap = 0.7;
-
-    // use the envire ICP implementation
-    // could think about using the PCL registration framework
-    envire::icp::TrimmedKD icp;
-    icp.addToModel( envire::icp::PointcloudAdapter( pc1, conf.model_density ) );
-    icp.align( envire::icp::PointcloudAdapter( pc2, conf.measurement_density ),  
-	    conf.max_iterations, conf.min_mse, conf.min_mse_diff, conf.overlap );
-
-    // come up with a covariance here
-    // TODO replace with calculated covariance values 
-    const double trans_error = 0.1;
-    const double rot_error = 10.0/180.0*M_PI;
-
-    Eigen::Matrix<double,6,1> cov_diag;
-    cov_diag << Eigen::Vector3d::Ones() * rot_error, 
-	     Eigen::Vector3d::Ones() * trans_error;
-
-    Eigen::Matrix<double,6,6> cov = 
-	cov_diag.array().square().matrix().asDiagonal();
-
-    Eigen::Affine3d bodyBtoBodyA = 
-	pc2->getFrameNode()->relativeTransform( pc1->getFrameNode() );
-
-    // add the egde to the optimization framework 
-    // this will update an existing edge
-    optimizer->addEdge( 
-	    optimizer->vertex( pc1->getFrameNode()->getUniqueIdNumericalSuffix() ),
-	    optimizer->vertex( pc2->getFrameNode()->getUniqueIdNumericalSuffix() ),
-	    eigen2Hogman( bodyBtoBodyA ),
-	    envireCov2HogmanInf( cov )
-	    );
-}
-
-/** 
- * try to associate two sparse feature clouds.
- *
- * @return the number of matching interframe features. This can be used as a measure of quality
- * for the match.
- */
-size_t PoseGraph::associateSparseMap( envire::Featurecloud *fc1, envire::Featurecloud *fc2 )
-{
-    stereo::StereoFeatures f;
-    stereo::FeatureConfiguration config;
-    config.isometryFilterThreshold = 1.0;
-    config.distanceFactor = 1.7;
-    config.isometryFilterMaxSteps = 1000;
-    f.setConfiguration( config );
-
-    f.calculateInterFrameCorrespondences( fc1, fc2, stereo::FILTER_ISOMETRY );
-    std::vector<std::pair<long, long> > matches = f.getInterFrameCorrespondences();
-
-    if( f.getInterFrameCorrespondences().size() >= min_sparse_correspondences )
-    {
-	Eigen::Affine3d bodyBtoBodyA = f.getInterFrameCorrespondenceTransform();
-
-	// come up with a covariance here
-	// TODO replace with calculated covariance values 
-	const double trans_error = 0.1;
-	const double rot_error = 10.0/180.0*M_PI;
-
-	Eigen::Matrix<double,6,1> cov_diag;
-	cov_diag << Eigen::Vector3d::Ones() * rot_error, 
-		 Eigen::Vector3d::Ones() * trans_error;
-
-	Eigen::Matrix<double,6,6> cov = 
-	    cov_diag.array().square().matrix().asDiagonal();
-
-	// add the egde to the optimization framework 
-	// this will update an existing edge
-	optimizer->addEdge( 
-		optimizer->vertex( fc1->getFrameNode()->getUniqueIdNumericalSuffix() ),
-		optimizer->vertex( fc2->getFrameNode()->getUniqueIdNumericalSuffix() ),
-		eigen2Hogman( bodyBtoBodyA ),
-		envireCov2HogmanInf( cov )
-		);
-    }
-
-    return f.getInterFrameCorrespondences().size();
-}
 }

@@ -8,8 +8,6 @@
 #include <envire/operators/DistanceGridToPointcloud.hpp>
 
 #include <aislib/graph_optimizer/graph_optimizer3d_hchol.h>
-#include <envire/ransac.hpp>
-#include <envire/icpConfigurationTypes.hpp>
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/features2d/features2d.hpp"
@@ -18,6 +16,8 @@
 
 #include <envire/operators/MLSProjection.hpp>
 #include <envire/maps/MLSGrid.hpp>
+
+#include <graph_slam/VisualSensorMaps.hpp>
 
 namespace graph_slam
 {
