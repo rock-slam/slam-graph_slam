@@ -3,6 +3,10 @@
 namespace graph_slam
 {
 
+SensorMaps::~SensorMaps()
+{
+}
+
 void SensorMaps::setFrameNode( envire::FrameNode* a )
 {
     this->frameNode = a;

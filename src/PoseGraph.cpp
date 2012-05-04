@@ -1,4 +1,5 @@
 #include "PoseGraph.hpp"
+#include <base/logging.h>
 
 namespace graph_slam 
 {
@@ -80,41 +81,9 @@ Eigen::Matrix<double,6,6> hogmanCov2EnvireCov( const Matrix6& hogman_matrix )
 }
 
 PoseGraph::PoseGraph( envire::Environment* env, int num_levels, int node_distance ) 
-    : max_node_radius( 25.0 ), 
-    min_sparse_correspondences( 7 ),
+    : max_node_radius( 25.0 ),
     env( env ), optimizer( new AISNavigation::HCholOptimizer3D( num_levels, node_distance ) ) 
 {
-    // set-up body frame
-    bodyFrame = new envire::FrameNode();
-    env->addChild( env->getRootNode(), bodyFrame.get() );
-
-    // set-up chain for distance images
-    distFrame = new envire::FrameNode();
-    env->addChild( bodyFrame.get(), distFrame.get() );
-
-    distOp = new envire::DistanceGridToPointcloud();
-    distOp->setMaxDistance( 5.0 );
-    env->attachItem( distOp.get() );
-
-    // set-up the chain for the feature clouds
-    featureFrame = new envire::FrameNode();
-    env->addChild( bodyFrame.get(), featureFrame.get() );
-    featurecloud = new envire::Featurecloud();
-    env->setFrameNode( featurecloud.get(), featureFrame.get() );
-
-    // set-up the target mls
-    const double cell_size = 0.2;
-    const double grid_size = 150;
-    mlsGrid = new envire::MLSGrid( 
-	    grid_size / cell_size, grid_size / cell_size, 
-	    cell_size, cell_size, -grid_size / 2.0, -grid_size / 2.0 );
-    mlsGrid->setHorizontalPatchThickness( 0.5 );
-    mlsGrid->setGapSize( 1.0 );
-    env->setFrameNode( mlsGrid.get(), env->getRootNode() );
-    mlsOp = new envire::MLSProjection();
-    mlsOp->useUncertainty( false );
-    env->attachItem( mlsOp.get() );
-    mlsOp->addOutput( mlsGrid.get() );
 }
 
 PoseGraph::~PoseGraph()
@@ -123,250 +92,118 @@ PoseGraph::~PoseGraph()
     delete optimizer;
 
     // delete the nodeMap objects
-    for( std::map<long, SensorMaps*>::iterator it = nodeMap.begin(); it != nodeMap.end(); it++ )
+    for( std::map<string, SensorMaps*>::iterator it = nodeMap.begin(); it != nodeMap.end(); it++ )
 	delete it->second;
 }
 
-void PoseGraph::initNode( const envire::TransformWithUncertainty &body2bodyPrev, const envire::TransformWithUncertainty &body2world )
+void PoseGraph::addNode( envire::FrameNode* fn, const envire::TransformWithUncertainty& transform )
 {
-    // handle relative poses
-    initNode( body2bodyPrev );
+    // get the vertex id
+    long id = fn->getUniqueIdNumericalSuffix();
 
-    // handle the root vertex, which should contain the rotation constraints given
-    // by body2world
-    AISNavigation::PoseGraph3D::Vertex *root_vertex = optimizer->vertex( 0 );
-    if( !root_vertex )
-    {
-	// create a root node 
-	root_vertex = optimizer->addVertex( 
-		0,
-		Transformation3(),
-		Matrix6::eye(1.0) );
-    }
+    // make sure the node is not already registered
+    AISNavigation::PoseGraph3D::Vertex 
+	*v = optimizer->vertex( id );
+    assert( !v );
 
-    // create a copy of the body2world transform, and set the covariance
-    // for the position very large
-    envire::TransformWithUncertainty body2root = body2world;
-    Eigen::Matrix<double,6,6> cov = body2root.getCovariance();
-    cov.bottomRightCorner<3,3>() = Eigen::Vector3d( 1e8, 1e8, 1e8 ).asDiagonal();
-    body2root.setCovariance( cov );
+    // create a sensor maps object
+    getSensorMaps( fn );
+
+    // create a new hogman vertex for this node
+    optimizer->addVertex( 
+	    id,
+	    eigen2Hogman( transform.getTransform() ),
+	    envireCov2HogmanInf( transform.getCovariance() ) );
+}
+
+void PoseGraph::addNode( envire::FrameNode* fn )
+{
+    addNode( fn, fn->getTransformWithUncertainty() );
+}
+
+void PoseGraph::addConstraint( const envire::FrameNode* fn1, const envire::FrameNode* fn2, const envire::TransformWithUncertainty& transform )
+{
+    AISNavigation::PoseGraph3D::Vertex 
+	*v1 = optimizer->vertex( fn1->getUniqueIdNumericalSuffix() ),
+	*v2 = optimizer->vertex( fn2->getUniqueIdNumericalSuffix() );
+
+    assert( v1 && v2 );
 
     optimizer->addEdge( 
-	    root_vertex,
-	    optimizer->vertex( currentBodyFrame->getUniqueIdNumericalSuffix() ),
-	    eigen2Hogman( body2root.getTransform() ),
-	    envireCov2HogmanInf( body2root.getCovariance() )
+	    v1,
+	    v2,
+	    eigen2Hogman( transform.getTransform() ),
+	    envireCov2HogmanInf( transform.getCovariance() )
 	    );
 }
 
-/** will prepare a new node based on an initial transformation
-*/
-void PoseGraph::initNode( const envire::TransformWithUncertainty &body2bodyPrev )
+void PoseGraph::associateNode( envire::FrameNode* update_fn )
 {
-    // apply the relative transform to the current bodyFrame position
-    bodyFrame->setTransform( bodyFrame->getTransformWithUncertainty() *
-	    body2bodyPrev );
-
-    // copy the bodyFrame node, and use it to store any additional map information
-    // that is added through the other add functions
-    currentBodyFrame = new envire::FrameNode(
-	    bodyFrame->getTransformWithUncertainty() );
-
-    env->addChild( bodyFrame->getParent(), currentBodyFrame.get() );
-
-    // create a new hogman vertex for this node
-    AISNavigation::PoseGraph3D::Vertex *new_vertex = optimizer->addVertex( 
-	    currentBodyFrame->getUniqueIdNumericalSuffix(),
-	    Transformation3(),
-	    Matrix6::eye(1.0) );
-
-    // in case there is a previous node create a vertex based on odometry
-    // information
-    if( prevBodyFrame )
+    for( std::map<std::string, SensorMaps*>::iterator it = nodeMap.begin();
+	    it != nodeMap.end(); it++ )
     {
-	optimizer->addEdge( 
-		optimizer->vertex( prevBodyFrame->getUniqueIdNumericalSuffix() ),
-		new_vertex,
-		eigen2Hogman( body2bodyPrev.getTransform() ),
-		envireCov2HogmanInf( body2bodyPrev.getCovariance() )
-		);
-    }
-}
-
-/** adds a sensor reading for a distance image to an initialized node
-*/
-void PoseGraph::addSensorReading( const base::samples::DistanceImage& distImage, const Eigen::Affine3d& sensor2body, const base::samples::frame::Frame& textureImage )
-{
-    // configure the processing chain for the distance image
-    assert( currentBodyFrame );
-
-    // create new distance grid object
-    distFrame->setTransform( sensor2body );
-    if( !distGrid )
-    {
-	// create new grid using the parameters from the distance image
-	distGrid = new envire::DistanceGrid( distImage );
-
-	// distGrid has just been created and needs to be attached
-	distOp->addInput( distGrid.get() );
-	distGrid->setFrameNode( distFrame.get() );
-    }
-    distGrid->copyFromDistanceImage( distImage );
-
-    // create new imagegrid object if not available
-    if( !textureGrid )
-    {
-	// copy the scaling properties from distanceImage
-	// TODO this is a hack!
-	textureGrid = new envire::ImageRGB24( 
-		distImage.width, distImage.height, 
-		distImage.scale_x, distImage.scale_y, 
-		distImage.center_x, distImage.center_y );
-	env->attachItem( textureGrid.get() );
-
-	distOp->addInput( textureGrid.get() );
-	textureGrid->setFrameNode( distFrame.get() );
-    }
-    textureGrid->copyFromFrame( textureImage );
-
-    envire::Pointcloud::Ptr distPc = new envire::Pointcloud();
-    env->setFrameNode( distPc.get(), currentBodyFrame.get() );
-    distPc->setLabel("dense");
-    distOp->removeOutputs();
-    distOp->addOutput( distPc.get() );
-
-    distOp->updateAll();
-
-    mlsOp->addInput( distPc.get() );
-
-    /*
-       envire::GraphViz gv;
-       gv.writeToFile( env, "/tmp/gv.dot" );
-       */
-}	
-
-/** adds a sensor reading for a feature array to an initialized node
-*/
-void PoseGraph::addSensorReading( const stereo::StereoFeatureArray& featureArray, const Eigen::Affine3d& sensor2body )
-{
-    // configure the processing chain for the feature image 
-    assert( currentBodyFrame );
-    featureFrame->setTransform( sensor2body );
-    // copy only up to a certain distance to omit the features further out
-    featureArray.copyTo( *featurecloud.get(), 5.0 );
-
-    envire::Featurecloud::Ptr featurePc = new envire::Featurecloud();
-    env->setFrameNode( featurePc.get(), currentBodyFrame.get() );
-    featurePc->setLabel("sparse");
-
-    featurePc->copyFrom( featurecloud.get() );
-    featurePc->itemModified();
-}
-
-/** adds an initialized node, with optional sensor readings to the node graph
- *
- * requires a previous call to initNode(), as well addSensorReading() calls
- * for each sensor reading.
- */
-void PoseGraph::addNode()
-{
-    assert( currentBodyFrame );
-
-    // find relevant associations based on the current state of the graph
-    // for now, we just associate with the previous node. 
-    //if( prevBodyFrame )
-    //{
-    //    associateNodes( prevBodyFrame.get(), currentBodyFrame.get() );
-    //}
-
-    // perform association with other nodes, to actually form graphs!
-    for( AISNavigation::Graph::VertexIDMap::iterator it = optimizer->vertices().begin(); 
-	    it != optimizer->vertices().end(); it++ )
-    {
+	envire::FrameNode *fn = it->second->frameNode.get();
 	// don't associate with self
-	if( currentBodyFrame->getUniqueIdNumericalSuffix() != it->first )
+	if( update_fn != fn )
 	{
-	    const int id = it->first; 
-	    std::string env_item_id;
-	    if(id == 0 || env->getEnvironmentPrefix() == "")
-	    {
-		env_item_id =  boost::lexical_cast<std::string>(id);
-	    }
-	    else
-	    {
-		env_item_id = env->getEnvironmentPrefix() + '/';
-		env_item_id += boost::lexical_cast<std::string>(id);
-	    }
-	    envire::FrameNode::Ptr fn = env->getItem<envire::FrameNode>( env_item_id ).get();
-	    std::cout << "associate node " << fn->getUniqueIdNumericalSuffix() << " with " << currentBodyFrame->getUniqueIdNumericalSuffix() << "... ";
-	    bool result = associateNodes( fn.get(), currentBodyFrame.get() ); 
-	    std::cout << (result ? "match" : "no match") << std::endl;
+	    bool result = associateNodes( fn, update_fn ); 
+
+	    LOG_INFO_S << "associate node " 
+		<< fn->getUniqueIdNumericalSuffix() 
+		<< " with " 
+		<< update_fn->getUniqueIdNumericalSuffix() << "... "
+		<< (result ? "match" : "no match");
 	}
     }
+}
 
+void PoseGraph::optimizeNodes( int iterations )
+{
     // perform the graph optimization
-    const int iterations = 5;
     optimizer->optimize( iterations, true );
-
-    mlsGrid->clear();
-    mlsOp->updateAll();
 
     // write the poses back to the environment
     // for now, write all the poses back, could add an updated flag
-    for( AISNavigation::Graph::VertexIDMap::iterator it = optimizer->vertices().begin(); 
-	    it != optimizer->vertices().end(); it++ )
+    for( std::map<std::string, SensorMaps*>::iterator it = nodeMap.begin();
+	    it != nodeMap.end(); it++ )
     {
-	const int id = it->first;
-	const AISNavigation::PoseGraph3D::Vertex* vertex = static_cast<AISNavigation::PoseGraph3D::Vertex*>(it->second);
+	SensorMaps *sm = it->second;
+	AISNavigation::PoseGraph3D::Vertex 
+	    *vertex = optimizer->vertex( sm->vertexId );
 
 	// get pose with uncertainty from Hogman
 	envire::TransformWithUncertainty tu( 
 		hogman2Eigen( vertex->transformation ), 
 		hogmanCov2EnvireCov( vertex->covariance ) );
 
-	// and set it in envire for the frameNode with the corresponding id
-	std::string env_item_id;
-	if(id == 0 || env->getEnvironmentPrefix() == "")
-	{
-	    env_item_id =  boost::lexical_cast<std::string>(id);
-	}
-	else
-	{
-	    env_item_id = env->getEnvironmentPrefix() + '/';
-	    env_item_id += boost::lexical_cast<std::string>(id);
-	}
-	envire::FrameNode::Ptr fn = env->getItem<envire::FrameNode>( env_item_id ).get();
+	envire::FrameNode::Ptr fn = sm->frameNode; 
 	fn->setTransform( tu );
 
 	// update the bounds 
 	// TODO this could be optimized, as it may be to expensive to 
 	// update the bounds everytime we have a small change in position
-	getSensorMaps( fn.get() )->updateBounds();
+	sm->updateBounds();
     }
-
-    // TODO see if we need to reassociate here 
-
-    bodyFrame->setTransform( currentBodyFrame->getTransform() );
-    prevBodyFrame = currentBodyFrame;
-    currentBodyFrame = NULL;
 }
+
 
 /** will return a sensormaps structure for a given 
  * framenode. creates a new one, if not already existing.
  */
 SensorMaps* PoseGraph::getSensorMaps( envire::FrameNode* fn )
 {
-    const long id = fn->getUniqueIdNumericalSuffix();
+    std::string id = fn->getUniqueId();
 
     // see if we can return a cached object
-    std::map<long, SensorMaps*>::iterator 
+    std::map<std::string, SensorMaps*>::iterator 
 	f = nodeMap.find( id );
 
     if( f != nodeMap.end() )
 	return f->second;
 
     // otherwise create a new node
-    SensorMaps* sm = new VisualSensorMaps( fn );
+    SensorMaps* sm = createSensorMaps( fn );
+    sm->vertexId = fn->getUniqueIdNumericalSuffix();
     nodeMap.insert( make_pair( id, sm ) );
 
     // call update bounds once, so we have an initial
@@ -375,7 +212,6 @@ SensorMaps* PoseGraph::getSensorMaps( envire::FrameNode* fn )
 
     return sm;
 }
-
 
 /** 
  * associate two framenodes, if they are within a feasable distance

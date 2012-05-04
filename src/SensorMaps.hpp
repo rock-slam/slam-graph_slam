@@ -12,6 +12,8 @@ namespace graph_slam
 class SensorMaps
 {
 public:
+    virtual ~SensorMaps();
+
     void setFrameNode( envire::FrameNode* a );
 
     void update();
@@ -26,6 +28,9 @@ public:
 
     // store the frameNode pointer
     envire::FrameNode::Ptr frameNode;
+
+    // id of the vertex associated with the frameNode 
+    long vertexId;
 
     // cached local bounds
     Eigen::AlignedBox<double, 3> extents;

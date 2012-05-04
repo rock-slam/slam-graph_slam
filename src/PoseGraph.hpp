@@ -2,22 +2,8 @@
 #define __GRAPH_SLAM_POSE_GRAPH_HPP__
 
 #include <envire/Core.hpp>
-#include <envire/maps/Pointcloud.hpp>
-#include <envire/maps/Featurecloud.hpp>
-#include <envire/maps/Grids.hpp>
-#include <envire/operators/DistanceGridToPointcloud.hpp>
-
 #include <aislib/graph_optimizer/graph_optimizer3d_hchol.h>
-
-#include "opencv2/core/core.hpp"
-#include "opencv2/features2d/features2d.hpp"
-
-#include <stereo/sparse_stereo.hpp>
-
-#include <envire/operators/MLSProjection.hpp>
-#include <envire/maps/MLSGrid.hpp>
-
-#include <graph_slam/VisualSensorMaps.hpp>
+#include <graph_slam/SensorMaps.hpp>
 
 namespace graph_slam
 {
@@ -52,68 +38,59 @@ protected:
      */
     double max_node_radius;
 
-    /** minimum number of sparse correspondences required to consider a match
-     * successfull.
-     */
-    size_t min_sparse_correspondences;
-
 protected:
     envire::Environment *env;
     AISNavigation::GraphOptimizer3D *optimizer;
-    std::map<long, SensorMaps*> nodeMap;
-
-    // body frame of the robot
-    envire::FrameNode::Ptr bodyFrame;
-
-    // chain for processing distance images
-    envire::FrameNode::Ptr distFrame;
-    envire::DistanceGrid::Ptr distGrid;
-    envire::ImageRGB24::Ptr textureGrid;
-    envire::DistanceGridToPointcloud::Ptr distOp;
-
-    // chain for feature clouds
-    envire::FrameNode::Ptr featureFrame;
-    envire::Featurecloud::Ptr featurecloud;
-
-    // pointer to relevant nodes
-    envire::FrameNode::Ptr prevBodyFrame;
-    envire::FrameNode::Ptr currentBodyFrame;
-
-    // MLS map and projection operator
-    envire::MLSGrid::Ptr mlsGrid;
-    envire::MLSProjection::Ptr mlsOp;
+    std::map<std::string, SensorMaps*> nodeMap;
 
 public:
     PoseGraph( envire::Environment* env, int num_levels = 3, int node_distance = 2 );
 
-    ~PoseGraph();
+    virtual ~PoseGraph();
 
-    void initNode( const envire::TransformWithUncertainty &body2bodyPrev, const envire::TransformWithUncertainty &body2world );
-
-    /** will prepare a new node based on an initial transformation
-     */
-    void initNode( const envire::TransformWithUncertainty &body2bodyPrev );
-
-    /** adds a sensor reading for a distance image to an initialized node
-     */
-    void addSensorReading( const base::samples::DistanceImage& distImage, const Eigen::Affine3d& sensor2body, const base::samples::frame::Frame& textureImage );
-
-    /** adds a sensor reading for a feature array to an initialized node
-     */
-    void addSensorReading( const stereo::StereoFeatureArray& featureArray, const Eigen::Affine3d& sensor2body );
-
-    /** adds an initialized node, with optional sensor readings to the node graph
+    /** @brief add a new constraint to the pose graph
      *
-     * requires a previous call to initNode(), as well addSensorReading() calls
-     * for each sensor reading.
+     * @param fn1 first frameNode for which to add a constraint
+     * @param fn2 second frameNode for which to add a constriant
+     * @param transform transformation with uncertainty from fn2 to fn1
      */
-    void addNode();
+    void addConstraint( const envire::FrameNode* fn1, const envire::FrameNode* fn2, const envire::TransformWithUncertainty& transform );
+
+    /** @brief add a new vertex to the pose graph
+     *
+     * @param fn the framenode, which is tracked by the new node
+     * @param transform the transform from this node to the root with uncertainty
+     */
+    void addNode( envire::FrameNode* fn, const envire::TransformWithUncertainty& transform );
+
+    /** @brief add a new vertex to the pose graph
+     *
+     * Will use the transform associated with the FrameNode for initialising
+     * the position and the uncertainty.
+     *
+     * @param fn the framenode, which is tracked by the new node
+     */
+    void addNode( envire::FrameNode* fn );
+
+    /** @brief will try to associate the node with other nodes in the graph
+     *
+     * Which nodes it will try to associate with depends on the internal
+     * heuristics. For each association that is found, a new constraint
+     * is generated and added to the graph.
+     */
+    void associateNode( envire::FrameNode* fn );
+
+    /** @brief will run the graph optimization and write the results back 
+     * to the FrameNodes
+     */
+    void optimizeNodes( int iterations = 5 );
 
     /** will return a sensormaps structure for a given 
      * framenode. creates a new one, if not already existing.
      */
     SensorMaps* getSensorMaps( envire::FrameNode* fn );
 
+protected:
     /** 
      * associate two framenodes, if they are within a feasable distance
      * between each other and have overlapping bounding boxes.
@@ -122,15 +99,7 @@ public:
      */ 
     bool associateNodes( envire::FrameNode* a, envire::FrameNode* b );
 
-    void associateStereoMap( envire::Pointcloud* pc1, envire::Pointcloud* pc2 );
-
-    /** 
-     * try to associate two sparse feature clouds.
-     *
-     * @return the number of matching interframe features. This can be used as a measure of quality
-     * for the match.
-     */
-    size_t associateSparseMap( envire::Featurecloud *fc1, envire::Featurecloud *fc2 );
+    virtual SensorMaps* createSensorMaps( envire::FrameNode* fn ) = 0;
 };
 }
 
