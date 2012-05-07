@@ -44,6 +44,12 @@ protected:
     std::map<std::string, SensorMaps*> nodeMap;
 
 public:
+    /** @brief Constructor for PoseGraph 
+     *
+     * @param env the environment the PoseGraph is applied to
+     * @param num_levels number of hierarchy levels for the constraint solver
+     * @param node_distance @todo describe from hogman
+     */
     PoseGraph( envire::Environment* env, int num_levels = 3, int node_distance = 2 );
 
     virtual ~PoseGraph();
@@ -85,20 +91,26 @@ public:
      */
     void optimizeNodes( int iterations = 5 );
 
-    /** will return a sensormaps structure for a given 
+    /** @will return a sensormaps structure for a given 
      * framenode. creates a new one, if not already existing.
      */
     SensorMaps* getSensorMaps( envire::FrameNode* fn );
 
 protected:
     /** 
-     * associate two framenodes, if they are within a feasable distance
+     * @brief associate two framenodes, if they are within a feasable distance
      * between each other and have overlapping bounding boxes.
      *
      * @return true if an association has been added
      */ 
     bool associateNodes( envire::FrameNode* a, envire::FrameNode* b );
 
+    /** 
+     * @brief create a new SensorMaps structure for the given FrameNode
+     *
+     * Implement this method in a subclass, and return an object which is a
+     * subclass of SensorMaps.
+     */
     virtual SensorMaps* createSensorMaps( envire::FrameNode* fn ) = 0;
 };
 }

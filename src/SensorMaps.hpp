@@ -20,6 +20,12 @@ public:
 
     virtual void updateExtents() = 0;
 
+    /** 
+     * @brief associate this sensor map with another one
+     *
+     * Any constraints that have been found because the two maps have a
+     * relation will be added to the constraints vector.
+     */
     virtual void associate( SensorMaps *maps, std::vector<envire::TransformWithUncertainty>& constraints ) = 0;
 
     // update the bounds of the map using the uncertainty 
