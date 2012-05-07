@@ -168,6 +168,13 @@ void VisualPoseGraph::addNode()
 {
     assert( currentBodyFrame );
 
+    // since the maps have changed between registering the node
+    // and now, we need to update some stuff
+    VisualSensorMaps *sm = dynamic_cast<VisualSensorMaps*>( getSensorMaps( currentBodyFrame.get() ) );
+    assert( sm );
+    sm->updateMaps();
+    sm->update();
+
     associateNode( currentBodyFrame.get() );
     optimizeNodes();
 

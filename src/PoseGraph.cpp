@@ -182,7 +182,7 @@ void PoseGraph::optimizeNodes( int iterations )
 	// update the bounds 
 	// TODO this could be optimized, as it may be to expensive to 
 	// update the bounds everytime we have a small change in position
-	sm->updateBounds();
+	sm->update();
     }
 }
 
@@ -208,7 +208,7 @@ SensorMaps* PoseGraph::getSensorMaps( envire::FrameNode* fn )
 
     // call update bounds once, so we have an initial
     // idea of the bounds
-    sm->updateBounds();
+    sm->update();
 
     return sm;
 }

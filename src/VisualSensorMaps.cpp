@@ -6,12 +6,18 @@
 namespace graph_slam
 {
 VisualSensorMaps::VisualSensorMaps( envire::FrameNode* fn )
-    : min_sparse_correspondences( 7 )
+    : stereoMap(NULL), 
+    sparseMap(NULL), 
+    min_sparse_correspondences( 7 )
 {
     setFrameNode( fn );
+    updateMaps();
+}
 
+void VisualSensorMaps::updateMaps()
+{
     // go through all the maps in the framenode and see if they fit a sensor map 
-    std::list<envire::CartesianMap*> la = fn->getMaps();
+    std::list<envire::CartesianMap*> la = frameNode->getMaps();
     for( std::list<envire::CartesianMap*>::iterator it = la.begin();
 	    it != la.end(); it ++ )
     {

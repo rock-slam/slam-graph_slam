@@ -12,6 +12,7 @@ class VisualSensorMaps : public SensorMaps
 public:
     explicit VisualSensorMaps( envire::FrameNode* fn );
     void updateExtents();
+    void updateMaps();
     void associate( SensorMaps *maps, std::vector<envire::TransformWithUncertainty>& constraints );
 
 protected:

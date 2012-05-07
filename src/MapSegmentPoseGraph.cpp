@@ -111,7 +111,7 @@ namespace graph_slam
 	mergeOperator = op;
     }
 
-    SensorMaps* createSensorMaps( envire::FrameNode* fn )
+    SensorMaps* MapSegmentPoseGraph::createSensorMaps( envire::FrameNode* fn )
     {
 	MapSegmentSensorMaps *sm = new MapSegmentSensorMaps();
 	std::list<envire::CartesianMap*> maps =
