@@ -44,6 +44,8 @@ void VisualSensorMaps::updateExtents()
 
 void VisualSensorMaps::associateStereoMap( envire::Pointcloud* pc1, envire::Pointcloud* pc2, std::vector<envire::TransformWithUncertainty>& constraints ) 
 {
+    return;
+
     // perform an icp fitting of the two pointclouds
     // given a currently static parameter set
     envire::icp::ICPConfiguration conf;
@@ -83,8 +85,8 @@ size_t VisualSensorMaps::associateSparseMap( envire::Featurecloud *fc1, envire::
 {
     stereo::StereoFeatures f;
     stereo::FeatureConfiguration config;
-    config.isometryFilterThreshold = 1.0;
-    config.distanceFactor = 1.7;
+    config.isometryFilterThreshold = 1.5;
+    config.distanceFactor = 1.5;
     config.isometryFilterMaxSteps = 1000;
     f.setConfiguration( config );
 
@@ -97,8 +99,8 @@ size_t VisualSensorMaps::associateSparseMap( envire::Featurecloud *fc1, envire::
 
 	// come up with a covariance here
 	// TODO replace with calculated covariance values 
-	const double trans_error = 0.1;
-	const double rot_error = 10.0/180.0*M_PI;
+	const double trans_error = 1.5;
+	const double rot_error = 30.0/180.0*M_PI;
 
 	Eigen::Matrix<double,6,1> cov_diag;
 	cov_diag << Eigen::Vector3d::Ones() * rot_error, 
