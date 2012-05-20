@@ -5,6 +5,13 @@
 
 namespace graph_slam
 {
+VisualSensorMaps::VisualSensorMaps()
+    : stereoMap(NULL), 
+    sparseMap(NULL), 
+    min_sparse_correspondences( 7 )
+{
+}
+
 VisualSensorMaps::VisualSensorMaps( envire::FrameNode* fn )
     : stereoMap(NULL), 
     sparseMap(NULL), 

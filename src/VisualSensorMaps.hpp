@@ -10,6 +10,7 @@ namespace graph_slam
 class VisualSensorMaps : public SensorMaps
 {
 public:
+    VisualSensorMaps();
     explicit VisualSensorMaps( envire::FrameNode* fn );
     void updateExtents();
     void updateMaps();

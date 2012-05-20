@@ -1,14 +1,24 @@
 #include "MapSegmentPoseGraph.hpp"
+#include "VisualSensorMaps.hpp"
 
 namespace graph_slam
 {
     class MapSegmentSensorMaps : public SensorMaps
     {
+	VisualSensorMaps vm;
+
     public:
-	MapSegmentSensorMaps()
-	    : segment( NULL )
+	MapSegmentSensorMaps() :
+	    segment( NULL )
 	{
 	};
+
+	void setFrameNode( envire::FrameNode *fn )
+	{
+	    SensorMaps::setFrameNode( fn );
+	    vm.setFrameNode( fn );
+	    vm.updateMaps();
+	}
 
 	envire::MapSegment *segment;
 
@@ -22,7 +32,12 @@ namespace graph_slam
 
 	void associate( SensorMaps *maps, std::vector<envire::TransformWithUncertainty>& constraints )
 	{
+	    MapSegmentSensorMaps *sma = this, *smb = dynamic_cast<MapSegmentSensorMaps*>(maps);
+	    assert( smb );
 	    // TODO
+
+	    // for now just use visual association
+	    vm.associate( &smb->vm, constraints );
 	}
     };
 

@@ -14,7 +14,7 @@ class SensorMaps
 public:
     virtual ~SensorMaps();
 
-    void setFrameNode( envire::FrameNode* a );
+    virtual void setFrameNode( envire::FrameNode* a );
 
     void update();
 
