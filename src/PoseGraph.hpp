@@ -2,13 +2,13 @@
 #define __GRAPH_SLAM_POSE_GRAPH_HPP__
 
 #include <envire/Core.hpp>
-#include <aislib/graph_optimizer/graph_optimizer3d_hchol.h>
 #include <graph_slam/SensorMaps.hpp>
 
 namespace graph_slam
 {
 
 class SensorMaps;
+struct OptimizerImpl;
 
 class PoseGraph
 {
@@ -20,7 +20,7 @@ protected:
 
 protected:
     envire::Environment *env;
-    AISNavigation::GraphOptimizer3D *optimizer;
+    OptimizerImpl *optimizer;
     std::map<std::string, SensorMaps*> nodeMap;
 
 public:

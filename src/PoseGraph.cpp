@@ -5,11 +5,19 @@
 namespace graph_slam 
 {
 
+struct OptimizerImpl
+{ 
+    OptimizerImpl() : hogman(NULL) {}
+    ~OptimizerImpl() { delete hogman; }
+    AISNavigation::GraphOptimizer3D *hogman;
+};
 
 PoseGraph::PoseGraph( envire::Environment* env, int num_levels, int node_distance ) 
     : max_node_radius( 25.0 ),
-    env( env ), optimizer( new AISNavigation::HCholOptimizer3D( num_levels, node_distance ) ) 
+    env( env ), optimizer( new OptimizerImpl ) 
 {
+    optimizer->hogman = 
+	new AISNavigation::HCholOptimizer3D( num_levels, node_distance );
 }
 
 PoseGraph::~PoseGraph()
@@ -29,14 +37,14 @@ void PoseGraph::addNode( envire::FrameNode* fn, const envire::TransformWithUncer
 
     // make sure the node is not already registered
     AISNavigation::PoseGraph3D::Vertex 
-	*v = optimizer->vertex( id );
+	*v = optimizer->hogman->vertex( id );
     assert( !v );
 
     // create a sensor maps object
     getSensorMaps( fn );
 
     // create a new hogman vertex for this node
-    optimizer->addVertex( 
+    optimizer->hogman->addVertex( 
 	    id,
 	    eigen2Hogman( transform.getTransform() ),
 	    envireCov2HogmanInf( transform.getCovariance() ) );
@@ -50,12 +58,12 @@ void PoseGraph::addNode( envire::FrameNode* fn )
 void PoseGraph::addConstraint( const envire::FrameNode* fn1, const envire::FrameNode* fn2, const envire::TransformWithUncertainty& transform )
 {
     AISNavigation::PoseGraph3D::Vertex 
-	*v1 = optimizer->vertex( fn1->getUniqueIdNumericalSuffix() ),
-	*v2 = optimizer->vertex( fn2->getUniqueIdNumericalSuffix() );
+	*v1 = optimizer->hogman->vertex( fn1->getUniqueIdNumericalSuffix() ),
+	*v2 = optimizer->hogman->vertex( fn2->getUniqueIdNumericalSuffix() );
 
     assert( v1 && v2 );
 
-    optimizer->addEdge( 
+    optimizer->hogman->addEdge( 
 	    v1,
 	    v2,
 	    eigen2Hogman( transform.getTransform() ),
@@ -86,7 +94,7 @@ void PoseGraph::associateNode( envire::FrameNode* update_fn )
 void PoseGraph::optimizeNodes( int iterations )
 {
     // perform the graph optimization
-    optimizer->optimize( iterations, true );
+    optimizer->hogman->optimize( iterations, false );
 
     // write the poses back to the environment
     // for now, write all the poses back, could add an updated flag
@@ -95,7 +103,7 @@ void PoseGraph::optimizeNodes( int iterations )
     {
 	SensorMaps *sm = it->second;
 	AISNavigation::PoseGraph3D::Vertex 
-	    *vertex = optimizer->vertex( sm->vertexId );
+	    *vertex = optimizer->hogman->vertex( sm->vertexId );
 
 	// get pose with uncertainty from Hogman
 	envire::TransformWithUncertainty tu( 
@@ -170,9 +178,9 @@ bool PoseGraph::associateNodes( envire::FrameNode* a, envire::FrameNode* b )
     {
 	// add the egde to the optimization framework 
 	// this will update an existing edge
-	optimizer->addEdge( 
-		optimizer->vertex( a->getUniqueIdNumericalSuffix() ),
-		optimizer->vertex( b->getUniqueIdNumericalSuffix() ),
+	optimizer->hogman->addEdge( 
+		optimizer->hogman->vertex( a->getUniqueIdNumericalSuffix() ),
+		optimizer->hogman->vertex( b->getUniqueIdNumericalSuffix() ),
 		eigen2Hogman( constraints[i].getTransform() ),
 		envireCov2HogmanInf( constraints[i].getCovariance() )
 		);
