@@ -94,7 +94,7 @@ size_t VisualSensorMaps::associateSparseMap( envire::Featurecloud *fc1, envire::
     stereo::FeatureConfiguration config;
     config.isometryFilterThreshold = 1.5;
     config.distanceFactor = 1.5;
-    config.isometryFilterMaxSteps = 1000;
+    config.isometryFilterMaxSteps = 5000;
     f.setConfiguration( config );
 
     f.calculateInterFrameCorrespondences( fc1, fc2, stereo::FILTER_ISOMETRY );
@@ -106,8 +106,8 @@ size_t VisualSensorMaps::associateSparseMap( envire::Featurecloud *fc1, envire::
 
 	// come up with a covariance here
 	// TODO replace with calculated covariance values 
-	const double trans_error = 1.5;
-	const double rot_error = 30.0/180.0*M_PI;
+	const double trans_error = 0.2;
+	const double rot_error = 2.0/180.0*M_PI;
 
 	Eigen::Matrix<double,6,1> cov_diag;
 	cov_diag << Eigen::Vector3d::Ones() * rot_error, 
