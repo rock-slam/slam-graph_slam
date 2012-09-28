@@ -5,6 +5,7 @@ rock_library(graph_slam
 	SensorMaps.cpp 
 	VisualSensorMaps.cpp
 	MapSegmentPoseGraph.cpp
+	Hogman2Eigen.cpp
     HEADERS 
 	VisualPoseGraph.hpp 
 	PoseGraph.hpp 
