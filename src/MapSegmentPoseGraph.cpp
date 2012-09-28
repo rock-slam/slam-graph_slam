@@ -1,8 +1,50 @@
 #include "MapSegmentPoseGraph.hpp"
 #include "VisualSensorMaps.hpp"
 
+#include <envire/maps/MLSGrid.hpp>
+
 namespace graph_slam
 {
+    void mergeMap( 
+	    envire::Operator* mergeOperator,
+	    envire::Layer* map_,
+	    envire::FrameNode* fn,
+	    double z_error = 0.0,
+	    size_t num_steps = 0 )
+    {
+	envire::MLSGrid* map = dynamic_cast<envire::MLSGrid*>( map_ );
+	assert( map );
+
+	envire::Environment *env = fn->getEnvironment();
+	envire::MLSGrid* grid = map->clone();
+
+	// attach to framenode and operator
+	env->setFrameNode( grid, fn );
+	mergeOperator->addInput( grid );
+
+	if( num_steps > 0 )
+	{
+	    // perform z-height correction
+	    // on all grid cells
+	    for(size_t m=0;m<grid->getWidth();m++)
+	    {
+		for(size_t n=0;n<grid->getHeight();n++)
+		{
+		    for( envire::MLSGrid::const_iterator cit = grid->beginCell(m,n); cit != grid->endCell(); cit++ )
+		    {
+			envire::MLSGrid::SurfacePatch p( *cit );
+			size_t uidx = p.update_idx;
+			// linear distribution of error
+			double error = z_error * (double)uidx / (double)num_steps;
+			p.mean -= error;
+		    }
+		}
+	    }
+	}
+
+	grid->itemModified();
+    }
+
     class MapSegmentSensorMaps : public SensorMaps
     {
 	VisualSensorMaps vm;
@@ -76,13 +118,16 @@ namespace graph_slam
     {
 	// run optimization on the nodes
 	// TODO make iterations configurable
-	optimizeNodes( 5 );
+	optimizeNodes( 15 );
 
 	// in case the mergeOperator is set
 	if( mergeOperator )
 	{
 	    // clear inputs first
-	    env->removeInputs( mergeOperator.get() );
+	    std::list<envire::Layer*> inputs =
+		env->getInputs( mergeOperator.get() );
+	    for( std::list<envire::Layer*>::iterator it = inputs.begin(); it != inputs.end(); it++ )
+		(*it)->detach();
 
 	    Eigen::Affine3d prevPose;
 	    for( size_t i=0; i<segments.size(); i++ )
@@ -98,11 +143,19 @@ namespace graph_slam
 
 		    // get the map, which matches that transform the 
 		    // closest
+		    base::Affine3d map_pose;
+		    size_t traj_size;
 		    envire::CartesianMap* map = 
-			segments[i-1]->getMapForPose( pose2prevPose );
+			segments[i-1]->getMapForPose( pose2prevPose, map_pose, traj_size );
 
 		    // and add as input
-		    mergeOperator->addInput( map );
+		    //mergeOperator->addInput( map );
+		    mergeMap( 
+			    mergeOperator.get(),
+			    map,
+			    segments[i-1]->getFrameNode(),
+			    pose2prevPose.translation().z() - map_pose.translation().z(),
+			    traj_size );
 
 		    // TODO check if the FrameNode of the map is 
 		    // the right one
@@ -116,8 +169,14 @@ namespace graph_slam
 	    {
 		envire::CartesianMap* map = 
 		    segments.back()->getBestMap();
-		mergeOperator->addInput( map ); 
+		//mergeOperator->addInput( map ); 
+		mergeMap( 
+			mergeOperator.get(),
+			map,
+			segments.back()->getFrameNode() );
 	    }
+
+	    mergeOperator->updateAll();
 	}
     }
 

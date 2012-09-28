@@ -9,6 +9,7 @@ namespace graph_slam
 
 class MapSegmentPoseGraph : public PoseGraph
 {
+public:
     MapSegmentPoseGraph( envire::Environment* env );
 
     /** @brief register a new map segment
