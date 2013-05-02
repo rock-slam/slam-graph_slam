@@ -30,7 +30,7 @@ namespace graph_slam
 	    {
 		for(size_t n=0;n<grid->getHeight();n++)
 		{
-		    for( envire::MLSGrid::const_iterator cit = grid->beginCell(m,n); cit != grid->endCell(); cit++ )
+		    for( envire::MLSGrid::iterator cit = grid->beginCell(m,n); cit != grid->endCell(); cit++ )
 		    {
 			envire::MLSGrid::SurfacePatch p( *cit );
 			size_t uidx = p.update_idx;
