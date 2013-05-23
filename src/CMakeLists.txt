@@ -1,18 +1,25 @@
 rock_library(graph_slam
     SOURCES 
-	VisualPoseGraph.cpp 
-	PoseGraph.cpp 
-	SensorMaps.cpp 
-	VisualSensorMaps.cpp
-	MapSegmentPoseGraph.cpp
-	Hogman2Eigen.cpp
+        VisualPoseGraph.cpp 
+        PoseGraph.cpp 
+        SensorMaps.cpp 
+        VisualSensorMaps.cpp
+        MapSegmentPoseGraph.cpp
+        Hogman2Eigen.cpp
+        edge_se3_gicp.cpp
+        vertex_se3_gicp.cpp
+        types_velodyne_slam.cpp
+        pointcloud_helper.cpp
     HEADERS 
-	VisualPoseGraph.hpp 
-	PoseGraph.hpp 
-	SensorMaps.hpp 
-	VisualSensorMaps.hpp
-	MapSegmentPoseGraph.hpp
+        VisualPoseGraph.hpp 
+        PoseGraph.hpp 
+        SensorMaps.hpp 
+        VisualSensorMaps.hpp
+        MapSegmentPoseGraph.hpp
+        edge_se3_gicp.hpp
+        vertex_se3_gicp.hpp
+        types_velodyne_slam.hpp
+        pointcloud_helper.hpp
     DEPS_PKGCONFIG 
-	envire base-types hogman stereo
+        envire base-types hogman stereo g2o pcl_registration-1.6
     )
-

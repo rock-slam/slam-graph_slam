@@ -9,4 +9,6 @@
     <depend package="base/types" />
     <depend package="slam/envire" />
     <depend package="image_processing/stereo" />
+    <depend package="slam/pcl" />
+    <depend package="slam/g2o" />
 </package>
