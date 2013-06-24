@@ -5,6 +5,8 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <envire/maps/Pointcloud.hpp>
+#include <base/samples/rigid_body_state.h>
+#include <graph_slam/matrix_helper.hpp>
 
 namespace graph_slam 
 {
@@ -20,11 +22,17 @@ public:
     void attachPointCloud(envire::Pointcloud* point_cloud, double density = 1.0);
     void detachPointCloud();
     PCLPointCloudConstPtr getPCLPointCloud() const;
+    void setOdometryPose(const base::samples::RigidBodyState& odometry_pose);
+    void setOdometryPose(const Eigen::Isometry3d& odometry_pose, const Matrix6d& odometry_cov) 
+                        {this->odometry_pose = odometry_pose; this->odometry_cov = odometry_cov;};
+    const Eigen::Isometry3d& getOdometryPose() const {return odometry_pose;};
+    const Matrix6d& getOdometryCovariance() const {return odometry_cov;};
     
 protected:
     envire::EnvironmentItem::Ptr envire_pointcloud;
     PCLPointCloudPtr pcl_point_cloud;
-    
+    Eigen::Isometry3d odometry_pose;
+    Matrix6d odometry_cov;
 };
 
 
