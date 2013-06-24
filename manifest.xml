@@ -11,4 +11,9 @@
     <depend package="image_processing/stereo" />
     <depend package="slam/pcl" />
     <depend package="slam/g2o" />
+    
+    <rosdep name="lapack" />
+    <rosdep name="blas" />
+    <rosdep name="cholmod" />
+    <rosdep name="csparse" />
 </package>

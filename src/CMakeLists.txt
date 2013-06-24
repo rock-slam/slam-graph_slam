@@ -10,6 +10,7 @@ rock_library(graph_slam
         vertex_se3_gicp.cpp
         types_velodyne_slam.cpp
         pointcloud_helper.cpp
+        extended_sparse_optimizer.cpp
         matrix_helper.cpp
     HEADERS 
         VisualPoseGraph.hpp 
@@ -21,7 +22,10 @@ rock_library(graph_slam
         vertex_se3_gicp.hpp
         types_velodyne_slam.hpp
         pointcloud_helper.hpp
+        extended_sparse_optimizer.hpp
         matrix_helper.hpp
     DEPS_PKGCONFIG 
         envire base-types hogman stereo g2o pcl_registration-1.6
+    DEPS_CMAKE
+        CSparse Cholmod BLAS LAPACK
     )
