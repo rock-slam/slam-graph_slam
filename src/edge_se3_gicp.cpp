@@ -5,18 +5,21 @@ namespace graph_slam
     
 EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true)
 {
-    
-    icp.setMaxCorrespondenceDistance(2.0);
-    icp.setMaximumIterations(25);
-    icp.setTransformationEpsilon(1e-5);
-    icp.setEuclideanFitnessEpsilon(1.0);
-    
-    icp.setCorrespondenceRandomness(3);
-    icp.setMaximumOptimizerIterations(10);
-    icp.setRotationEpsilon(2e-3);
+    setGICPConfiguration(GICPConfiguration());
     
     _measurement = Eigen::Isometry3d::Identity();
     _inverseMeasurement = Eigen::Isometry3d::Identity();
+}
+
+void EdgeSE3_GICP::setGICPConfiguration(const GICPConfiguration& gicp_config)
+{
+    icp.setMaxCorrespondenceDistance(gicp_config.max_correspondence_distance);
+    icp.setMaximumIterations(gicp_config.maximum_iterations);
+    icp.setTransformationEpsilon(gicp_config.transformation_epsilon);
+    icp.setEuclideanFitnessEpsilon(gicp_config.euclidean_fitness_epsilon);
+    icp.setCorrespondenceRandomness(gicp_config.correspondence_randomness);
+    icp.setMaximumOptimizerIterations(gicp_config.maximum_optimizer_iterations);
+    icp.setRotationEpsilon(gicp_config.rotation_epsilon);
 }
 
 bool EdgeSE3_GICP::setMeasurementFromState()
