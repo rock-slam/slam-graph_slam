@@ -27,6 +27,7 @@ public:
                         {this->odometry_pose = odometry_pose; this->odometry_cov = odometry_cov;};
     const Eigen::Isometry3d& getOdometryPose() const {return odometry_pose;};
     const Matrix6d& getOdometryCovariance() const {return odometry_cov;};
+    bool updateEnvireTransformation();
     
 protected:
     envire::EnvironmentItem::Ptr envire_pointcloud;

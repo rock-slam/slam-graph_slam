@@ -18,6 +18,8 @@
 #include <g2o/types/slam3d/edge_se3.h>
 #include <g2o/types/slam3d/vertex_se3.h>
 
+#include <envire/maps/Pointcloud.hpp>
+
 int main()
 {
     // init laser2robot parameter
@@ -68,8 +70,8 @@ int main()
         graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
         vertex->setId(i);
         vertex->setEstimate(vertex_pose);
-        std::vector<Eigen::Vector3d> point_cloud;
-        graph_slam::transformPointCloud(ref_pointcloud, point_cloud, true_vertex_pose);
+        envire::Pointcloud* point_cloud = new envire::Pointcloud();
+        graph_slam::transformPointCloud(ref_pointcloud, point_cloud->vertices, true_vertex_pose);
         vertex->attachPointCloud(point_cloud);
         optimizer.addVertex(vertex);
         
