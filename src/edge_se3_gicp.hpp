@@ -34,7 +34,8 @@ public:
     
     void computeError();
     
-    virtual bool setMeasurementFromState();
+    bool setMeasurementFromGICP();
+    bool setMeasurementFromOdometry();
     
     void linearizeOplus();
     
@@ -46,10 +47,12 @@ public:
     void setGICPConfiguration(const GICPConfiguration& gicp_config);
     
     void runGICP();
+    void useGuessForGICP(bool b) {use_guess_from_state = b;}
     
 protected:
     pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
     bool run_gicp;
+    bool use_guess_from_state;
 };
 
 

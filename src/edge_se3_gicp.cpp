@@ -3,7 +3,7 @@
 namespace graph_slam
 {
     
-EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true)
+EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false)
 {
     setGICPConfiguration(GICPConfiguration());
     
@@ -22,39 +22,60 @@ void EdgeSE3_GICP::setGICPConfiguration(const GICPConfiguration& gicp_config)
     icp.setRotationEpsilon(gicp_config.rotation_epsilon);
 }
 
-bool EdgeSE3_GICP::setMeasurementFromState()
+bool EdgeSE3_GICP::setMeasurementFromGICP()
 {
     if(icp.getInputTarget().get() == NULL || icp.getInputCloud().get() == NULL)
         return false;
     
-    pcl::PointCloud<pcl::PointXYZ> cloud_source_registered;
     // Perform the alignment
-    icp.align(cloud_source_registered);
+    pcl::PointCloud<pcl::PointXYZ> cloud_source_registered;
+    if(use_guess_from_state)
+    {
+        Eigen::Matrix4f guess = Eigen::Isometry3f(_inverseMeasurement).matrix();
+        icp.align(cloud_source_registered, guess);
+    }
+    else
+    {
+        icp.align(cloud_source_registered);
+    }
+    
     Eigen::Isometry3f transformation = Eigen::Isometry3f::Identity();
     transformation.matrix() = icp.getFinalTransformation();
-    _measurement = Eigen::Isometry3d(transformation);
+    _inverseMeasurement = Eigen::Isometry3d(transformation);
+    _measurement = _inverseMeasurement.inverse();
+    run_gicp = false;
+    return true;
+}
+
+bool EdgeSE3_GICP::setMeasurementFromOdometry()
+{
+    graph_slam::VertexSE3_GICP *from = static_cast<graph_slam::VertexSE3_GICP*>(_vertices[0]);
+    graph_slam::VertexSE3_GICP *to = static_cast<graph_slam::VertexSE3_GICP*>(_vertices[1]);
+    
+    _measurement = from->getOdometryPose().inverse() * to->getOdometryPose();
     _inverseMeasurement = _measurement.inverse();
+    _information = from->getOdometryCovariance().inverse() * to->getOdometryCovariance();
     return true;
 }
 
 void EdgeSE3_GICP::computeError()
 {
     if(run_gicp)
-        setMeasurementFromState();
+        setMeasurementFromGICP();
     EdgeSE3::computeError();
 }
 
 void EdgeSE3_GICP::initialEstimate(const g2o::OptimizableGraph::VertexSet& from, g2o::OptimizableGraph::Vertex* to)
 {
     if(run_gicp)
-        setMeasurementFromState();
+        setMeasurementFromGICP();
     EdgeSE3::initialEstimate(from, to);
 }
 
 void EdgeSE3_GICP::linearizeOplus()
 {
     if(run_gicp)
-        setMeasurementFromState();
+        setMeasurementFromGICP();
     EdgeSE3::linearizeOplus();
 }
 
