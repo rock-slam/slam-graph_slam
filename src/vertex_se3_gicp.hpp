@@ -4,23 +4,25 @@
 #include <g2o/types/slam3d/vertex_se3.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <envire/maps/Pointcloud.hpp>
 
 namespace graph_slam 
 {
-    
-typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
-typedef typename PCLPointCloud::Ptr PCLPointCloudPtr;
-typedef typename PCLPointCloud::ConstPtr PCLPointCloudConstPtr;
 
 class VertexSE3_GICP : public g2o::VertexSE3
 {
 public:
+    typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
+    typedef typename PCLPointCloud::Ptr PCLPointCloudPtr;
+    typedef typename PCLPointCloud::ConstPtr PCLPointCloudConstPtr;
+    
     VertexSE3_GICP();
-    void attachPointCloud(const std::vector<Eigen::Vector3d> &point_cloud, double density = 1.0);
+    void attachPointCloud(envire::Pointcloud* point_cloud, double density = 1.0);
     void detachPointCloud();
-    PCLPointCloudConstPtr getPCLPointCloud();
+    PCLPointCloudConstPtr getPCLPointCloud() const;
     
 protected:
+    envire::EnvironmentItem::Ptr envire_pointcloud;
     PCLPointCloudPtr pcl_point_cloud;
     
 };
