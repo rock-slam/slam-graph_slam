@@ -34,8 +34,7 @@ public:
     
     void computeError();
     
-    bool setMeasurementFromGICP();
-    bool setMeasurementFromOdometry();
+    bool setMeasurementFromGICP(bool delayed = false);
     
     void linearizeOplus();
     
@@ -46,7 +45,6 @@ public:
     
     void setGICPConfiguration(const GICPConfiguration& gicp_config);
     
-    void runGICP();
     void useGuessForGICP(bool b) {use_guess_from_state = b;}
     
 protected:

@@ -16,14 +16,14 @@
 namespace graph_slam 
 {
     
-ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer(), next_vertex_id(0), initialized(false)
+ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer(), next_vertex_id(0), initialized(false), 
+        odometry_pose_last_vertex(Eigen::Isometry3d::Identity()), odometry_covariance_last_vertex(Matrix6d::Identity())
 {
     setupOptimizer();
 }
 
 ExtendedSparseOptimizer::~ExtendedSparseOptimizer()
 {
-
 }
 
 void ExtendedSparseOptimizer::setupOptimizer()
@@ -49,7 +49,7 @@ void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& g
     
     for(g2o::HyperGraph::EdgeSet::iterator it = _edges.begin(); it != _edges.end(); it++)
     {
-        graph_slam::EdgeSE3_GICP* edge = static_cast<graph_slam::EdgeSE3_GICP*>(*it);
+        graph_slam::EdgeSE3_GICP* edge = dynamic_cast<graph_slam::EdgeSE3_GICP*>(*it);
         if(edge)
             edge->setGICPConfiguration(gicp_config);
     }
@@ -64,12 +64,13 @@ bool ExtendedSparseOptimizer::addVertex(const base::samples::RigidBodyState& rig
         return false;
     }
     
+    // get odometry pose and covariance
+    Eigen::Isometry3d odometry_pose(rigid_body_state.getTransform().matrix());
+    Matrix6d odometry_covariance = combineToPoseCovariance(rigid_body_state.cov_position, rigid_body_state.cov_orientation);
+    
     // create new vertex
     graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
     vertex->setId(next_vertex_id);
-    
-    // save odometry pose in vertex
-    vertex->setOdometryPose(rigid_body_state);
     
     // attach point cloud to vertex
     vertex->attachPointCloud(point_cloud, gicp_config.point_cloud_density);
@@ -88,40 +89,57 @@ bool ExtendedSparseOptimizer::addVertex(const base::samples::RigidBodyState& rig
         vertex->setFixed(true);
         
         // set odometry pose as inital pose
-        vertex->setEstimate(vertex->getOdometryPose());
+        vertex->setEstimate(odometry_pose);
     }
     else
     {
-        graph_slam::VertexSE3_GICP *source_vertex = static_cast<graph_slam::VertexSE3_GICP*>(this->vertex(next_vertex_id-1));
+        graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(next_vertex_id-1));
+        Eigen::Isometry3d odometry_pose_delta = odometry_pose_last_vertex.inverse() * odometry_pose;
+        Matrix6d odometry_covariance_delta = odometry_covariance_last_vertex.inverse() * odometry_covariance;
         
         // set pose of the source vertex times odometry delta as inital pose
-        vertex->setEstimate(source_vertex->estimate() * (source_vertex->getOdometryPose().inverse() * vertex->getOdometryPose()));
+        vertex->setEstimate(source_vertex->estimate() * odometry_pose_delta);
         
-        // create a edge between the last and the new vertex
-        graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
-        edge->setSourceVertex(source_vertex);
-        edge->setTargetVertex(vertex);
+        // create an odometry based edge between the last and the new vertex
+        g2o::EdgeSE3* odometry_edge = new g2o::EdgeSE3();
+        odometry_edge->vertices()[0] = source_vertex;
+        odometry_edge->vertices()[1] = vertex;
         
-        if(delayed_icp_update)
-            if(!edge->setMeasurementFromOdometry())
-                throw std::runtime_error("compute transformation from odometry failed!");
-        else
-            if(!edge->setMeasurementFromGICP())
-                throw std::runtime_error("compute transformation using gicp failed!");
-        
-        
-        if(!g2o::SparseOptimizer::addEdge(edge))
+        odometry_edge->setMeasurement(odometry_pose_delta);
+        odometry_edge->setInformation(odometry_covariance_delta.inverse());
+
+        if(!g2o::SparseOptimizer::addEdge(odometry_edge))
         {
-            std::cerr << "failed to add a new edge." << std::endl;
+            std::cerr << "failed to add a new odometry based edge." << std::endl;
             g2o::SparseOptimizer::removeVertex(vertex);
-            delete edge;
+            delete odometry_edge;
             delete vertex;
             return false;
         }
-        edges_to_add.insert(edge);
+        
+        // create an icp based edge between the last and the new vertex
+        graph_slam::EdgeSE3_GICP* icp_edge = new graph_slam::EdgeSE3_GICP();
+        icp_edge->setSourceVertex(source_vertex);
+        icp_edge->setTargetVertex(vertex);
+
+        if(!icp_edge->setMeasurementFromGICP(delayed_icp_update))
+            throw std::runtime_error("compute transformation using gicp failed!");
+        
+        if(!g2o::SparseOptimizer::addEdge(icp_edge))
+        {
+            std::cerr << "failed to add a new icp based edge." << std::endl;
+            g2o::SparseOptimizer::removeEdge(odometry_edge);
+            g2o::SparseOptimizer::removeVertex(vertex);
+            delete icp_edge;
+            delete vertex;
+            return false;
+        }
+        edges_to_add.insert(icp_edge);
     }
     
     vertices_to_add.insert(vertex);
+    odometry_pose_last_vertex = odometry_pose;
+    odometry_covariance_last_vertex = odometry_covariance;
     
     next_vertex_id++;
     return true;

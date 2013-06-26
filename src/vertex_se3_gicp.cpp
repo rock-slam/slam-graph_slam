@@ -43,17 +43,5 @@ bool VertexSE3_GICP::updateEnvireTransformation()
     }
     return false;
 }
-
-void VertexSE3_GICP::setOdometryPose(const base::samples::RigidBodyState& odometry_pose)
-{
-    Eigen::Isometry3d pose;
-    //note: this is ok, because the affine transformation of RigidBodyState is isometric.
-    pose.matrix() = odometry_pose.getTransform().matrix();
-    
-    Matrix6d covariance = combineToPoseCovariance(odometry_pose.cov_position, odometry_pose.cov_orientation);
-    
-    setOdometryPose(pose, covariance);
-}
-
     
 }

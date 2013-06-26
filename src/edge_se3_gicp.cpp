@@ -22,8 +22,14 @@ void EdgeSE3_GICP::setGICPConfiguration(const GICPConfiguration& gicp_config)
     icp.setRotationEpsilon(gicp_config.rotation_epsilon);
 }
 
-bool EdgeSE3_GICP::setMeasurementFromGICP()
+bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
 {
+    if(delayed)
+    {
+        run_gicp = true;
+        return true;
+    }
+    
     if(icp.getInputTarget().get() == NULL || icp.getInputCloud().get() == NULL)
         return false;
     
@@ -31,8 +37,13 @@ bool EdgeSE3_GICP::setMeasurementFromGICP()
     pcl::PointCloud<pcl::PointXYZ> cloud_source_registered;
     if(use_guess_from_state)
     {
+        /* NOTE gicp seems to be broken when a inital guess is given
+        if(_inverseMeasurement.matrix() == Eigen::Isometry3d::Identity().matrix())
+            setMeasurementFromOdometry();
         Eigen::Matrix4f guess = Eigen::Isometry3f(_inverseMeasurement).matrix();
         icp.align(cloud_source_registered, guess);
+        */
+        icp.align(cloud_source_registered, Eigen::Matrix4f::Identity());
     }
     else
     {
@@ -45,17 +56,7 @@ bool EdgeSE3_GICP::setMeasurementFromGICP()
     _measurement = _inverseMeasurement.inverse();
     run_gicp = false;
     return true;
-}
-
-bool EdgeSE3_GICP::setMeasurementFromOdometry()
-{
-    graph_slam::VertexSE3_GICP *from = static_cast<graph_slam::VertexSE3_GICP*>(_vertices[0]);
-    graph_slam::VertexSE3_GICP *to = static_cast<graph_slam::VertexSE3_GICP*>(_vertices[1]);
     
-    _measurement = from->getOdometryPose().inverse() * to->getOdometryPose();
-    _inverseMeasurement = _measurement.inverse();
-    _information = from->getOdometryCovariance().inverse() * to->getOdometryCovariance();
-    return true;
 }
 
 void EdgeSE3_GICP::computeError()
@@ -77,11 +78,6 @@ void EdgeSE3_GICP::linearizeOplus()
     if(run_gicp)
         setMeasurementFromGICP();
     EdgeSE3::linearizeOplus();
-}
-
-void EdgeSE3_GICP::runGICP()
-{
-    run_gicp = true;
 }
 
 void EdgeSE3_GICP::setSourceVertex(VertexSE3_GICP* source)
