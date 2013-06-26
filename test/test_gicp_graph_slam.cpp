@@ -48,6 +48,10 @@ int main()
 
     unsigned num_poses = 10;
     
+    // setup gicp config
+    graph_slam::GICPConfiguration icp_config;
+    icp_config.correspondence_randomness = 3;
+    
     // create reference pointcloud
     std::vector<Eigen::Vector3d> ref_pointcloud;
     ref_pointcloud.push_back(Eigen::Vector3d(-1.0,0.0,0.0));
@@ -71,7 +75,7 @@ int main()
         vertex->setId(i);
         vertex->setEstimate(vertex_pose);
         envire::Pointcloud* point_cloud = new envire::Pointcloud();
-        graph_slam::transformPointCloud(ref_pointcloud, point_cloud->vertices, true_vertex_pose);
+        graph_slam::transformPointCloud(ref_pointcloud, point_cloud->vertices, true_vertex_pose.inverse());
         vertex->attachPointCloud(point_cloud);
         optimizer.addVertex(vertex);
         
@@ -128,6 +132,7 @@ int main()
         edge->setTargetVertex(to);
         edge->setMeasurementFromState();
         edge->setInformation(10 * Eigen::Matrix<double, 6, 6>::Identity());
+        edge->setGICPConfiguration(icp_config);
         optimizer.addEdge(edge);
     }
 
