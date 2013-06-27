@@ -22,7 +22,7 @@ public:
     void attachPointCloud(envire::Pointcloud* point_cloud, double density = 1.0);
     void detachPointCloud();
     PCLPointCloudConstPtr getPCLPointCloud() const;
-    bool updateEnvireTransformation();
+    envire::EnvironmentItem::Ptr getEnvirePointCloud() const;
     
 protected:
     envire::EnvironmentItem::Ptr envire_pointcloud;

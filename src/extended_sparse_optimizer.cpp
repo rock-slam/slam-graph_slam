@@ -175,11 +175,50 @@ bool ExtendedSparseOptimizer::updateEnvireTransformations()
     unsigned err_counter = 0;
     for(VertexIDMap::const_iterator it = _vertices.begin(); it != _vertices.end(); it++)
     {
-        graph_slam::VertexSE3_GICP *vertex = static_cast<graph_slam::VertexSE3_GICP*>(it->second);
-        if(vertex && !vertex->updateEnvireTransformation())
-            err_counter++;
+        graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(it->second);
+        if(vertex)
+        {
+            envire::CartesianMap* map = dynamic_cast<envire::CartesianMap*>(vertex->getEnvirePointCloud().get());
+            if(map)
+            {
+                envire::FrameNode* framenode = map->getFrameNode();
+                if(framenode)
+                {
+                    framenode->setTransform(getEnvireTransformWithUncertainty(vertex));
+                    continue;
+                }
+            }
+        }
+        err_counter++;
     }
     return !err_counter;
+}
+
+bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2o::OptimizableGraph::Vertex* vertex)
+{
+    if(vertex && vertex->hessianIndex() >= 0)
+    {
+        g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
+        computeMarginals(spinv, vertex);
+        if(vertex->hessianIndex() >= spinv.blockCols().size())
+            return false;
+        Eigen::MatrixXd* vertex_cov = spinv.blockCols()[vertex->hessianIndex()].at(vertex->hessianIndex());
+        if(!vertex_cov)
+            return false;
+        covariance = Matrix6d(*vertex_cov);
+        return true;
+    }
+    return false;
+}
+
+envire::TransformWithUncertainty ExtendedSparseOptimizer::getEnvireTransformWithUncertainty(const g2o::VertexSE3* vertex)
+{
+    envire::TransformWithUncertainty transform = envire::TransformWithUncertainty::Identity();
+    transform.setTransform(Eigen::Affine3d(vertex->estimate().matrix()));
+    Matrix6d covariance;
+    if(getVertexCovariance(covariance, vertex))
+        transform.setCovariance(covariance);
+    return transform;
 }
     
 }

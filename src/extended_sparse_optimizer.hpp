@@ -5,6 +5,7 @@
 #include <base/samples/rigid_body_state.h>
 #include <graph_slam/edge_se3_gicp.hpp>
 #include <graph_slam/matrix_helper.hpp>
+#include <envire/core/Transform.hpp>
 
 
 namespace graph_slam 
@@ -18,6 +19,9 @@ public:
     virtual ~ExtendedSparseOptimizer();
     
     bool addVertex(const base::samples::RigidBodyState& rigid_body_state, envire::Pointcloud* point_cloud, bool delayed_icp_update = false);
+    
+    bool getVertexCovariance(Matrix6d& covariance, const Vertex* vertex);
+    envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::VertexSE3* vertex);
     
     void updateGICPConfiguration(const GICPConfiguration& gicp_config);
     
