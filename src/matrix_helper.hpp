@@ -5,13 +5,10 @@
 
 namespace graph_slam 
 {
-   typedef Eigen::Matrix<double,6,6> Matrix6d;
-   
-   
-   Matrix6d combineToPoseCovariance(const Eigen::Matrix3d& position_cov, const Eigen::Matrix3d& orientation_cov);
-   
-   void mergeSubMatrix(Matrix6d& matrix, const Eigen::Matrix3d& sub_matrix, unsigned int row, unsigned int col);
-   
+    typedef Eigen::Matrix<double,6,6> Matrix6d;
+    
+    Matrix6d combineToPoseCovariance(const Eigen::Matrix3d& position_cov, const Eigen::Matrix3d& orientation_cov);
+    
 } // end namespace
 
 #endif
