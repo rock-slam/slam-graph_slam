@@ -1,14 +1,16 @@
 #include "edge_se3_gicp.hpp"
+#include <graph_slam/matrix_helper.hpp>
 
 namespace graph_slam
 {
     
-EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false)
+EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false), max_fitness_score(1.0), position_sigma(0.001), orientation_sigma(0.0001)
 {
     setGICPConfiguration(GICPConfiguration());
     
     _measurement = Eigen::Isometry3d::Identity();
     _inverseMeasurement = Eigen::Isometry3d::Identity();
+    _information = Matrix6d::Zero();
 }
 
 void EdgeSE3_GICP::setGICPConfiguration(const GICPConfiguration& gicp_config)
@@ -20,6 +22,9 @@ void EdgeSE3_GICP::setGICPConfiguration(const GICPConfiguration& gicp_config)
     icp.setCorrespondenceRandomness(gicp_config.correspondence_randomness);
     icp.setMaximumOptimizerIterations(gicp_config.maximum_optimizer_iterations);
     icp.setRotationEpsilon(gicp_config.rotation_epsilon);
+    max_fitness_score = gicp_config.max_fitness_score;
+    position_sigma = gicp_config.position_sigma;
+    orientation_sigma = gicp_config.orientation_sigma;
 }
 
 bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
@@ -50,13 +55,18 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
         icp.align(cloud_source_registered);
     }
     
-    Eigen::Isometry3f transformation = Eigen::Isometry3f::Identity();
-    transformation.matrix() = icp.getFinalTransformation();
-    _inverseMeasurement = Eigen::Isometry3d(transformation);
-    _measurement = _inverseMeasurement.inverse();
+    double fitness_score = icp.getFitnessScore();
+    if(fitness_score <= max_fitness_score)
+    {
+        Eigen::Isometry3f transformation(icp.getFinalTransformation());
+        _inverseMeasurement = Eigen::Isometry3d(transformation);
+        _measurement = _inverseMeasurement.inverse();
+
+        _information = combineToPoseCovariance(pow(position_sigma,2) * Eigen::Matrix3d::Identity(), pow(orientation_sigma,2) * Eigen::Matrix3d::Identity()).inverse();
+    }
+    
     run_gicp = false;
     return true;
-    
 }
 
 void EdgeSE3_GICP::computeError()
