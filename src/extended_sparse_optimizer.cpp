@@ -99,42 +99,27 @@ bool ExtendedSparseOptimizer::addVertex(const base::samples::RigidBodyState& rig
         
         // set pose of the source vertex times odometry delta as inital pose
         vertex->setEstimate(source_vertex->estimate() * odometry_pose_delta);
+ 
+        // create an edge between the last and the new vertex
+        graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
+        edge->setSourceVertex(source_vertex);
+        edge->setTargetVertex(vertex);
         
-        // create an odometry based edge between the last and the new vertex
-        g2o::EdgeSE3* odometry_edge = new g2o::EdgeSE3();
-        odometry_edge->vertices()[0] = source_vertex;
-        odometry_edge->vertices()[1] = vertex;
-        
-        odometry_edge->setMeasurement(odometry_pose_delta);
-        odometry_edge->setInformation(odometry_covariance_delta.inverse());
+        edge->setMeasurement(odometry_pose_delta);
+        edge->setInformation(odometry_covariance_delta.inverse());
 
-        if(!g2o::SparseOptimizer::addEdge(odometry_edge))
-        {
-            std::cerr << "failed to add a new odometry based edge." << std::endl;
-            g2o::SparseOptimizer::removeVertex(vertex);
-            delete odometry_edge;
-            delete vertex;
-            return false;
-        }
-        
-        // create an icp based edge between the last and the new vertex
-        graph_slam::EdgeSE3_GICP* icp_edge = new graph_slam::EdgeSE3_GICP();
-        icp_edge->setSourceVertex(source_vertex);
-        icp_edge->setTargetVertex(vertex);
-
-        if(!icp_edge->setMeasurementFromGICP(delayed_icp_update))
+        if(!edge->setMeasurementFromGICP(delayed_icp_update))
             throw std::runtime_error("compute transformation using gicp failed!");
         
-        if(!g2o::SparseOptimizer::addEdge(icp_edge))
+        if(!g2o::SparseOptimizer::addEdge(edge))
         {
-            std::cerr << "failed to add a new icp based edge." << std::endl;
-            g2o::SparseOptimizer::removeEdge(odometry_edge);
+            std::cerr << "failed to add a new edge." << std::endl;
             g2o::SparseOptimizer::removeVertex(vertex);
-            delete icp_edge;
+            delete edge;
             delete vertex;
             return false;
         }
-        edges_to_add.insert(icp_edge);
+        edges_to_add.insert(edge);
     }
     
     vertices_to_add.insert(vertex);
