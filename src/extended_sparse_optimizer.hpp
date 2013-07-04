@@ -21,7 +21,7 @@ public:
     bool addVertex(const envire::TransformWithUncertainty& transformation, envire::Pointcloud* point_cloud, bool delayed_icp_update = false);
     
     void findNewEdges(int vertex_id);
-    void findNewEdgesForLastN(int last_n_vertices);
+    void findNewEdgesForLastN(unsigned last_n_vertices);
     
     bool getVertexCovariance(Matrix6d& covariance, const Vertex* vertex);
     envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::VertexSE3* vertex);

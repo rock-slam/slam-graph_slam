@@ -131,10 +131,20 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     return true;
 }
 
-void ExtendedSparseOptimizer::findNewEdgesForLastN(int last_n_vertices)
+void ExtendedSparseOptimizer::findNewEdgesForLastN(unsigned last_n_vertices)
 {
-    for(int i = next_vertex_id - last_n_vertices; i < next_vertex_id; i++)
-        findNewEdges(i);
+    unsigned ids = 0;
+    std::set<int> sorted_vertex_ids;
+    for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
+        sorted_vertex_ids.insert((*it)->id());
+    
+    for(std::set<int>::const_reverse_iterator it = sorted_vertex_ids.rbegin(); it != sorted_vertex_ids.rend(); it++)
+    {
+        findNewEdges(*it);
+        ids++;
+        if(ids == last_n_vertices)
+            break;
+    }
 }
 
 void ExtendedSparseOptimizer::findNewEdges(int vertex_id)
