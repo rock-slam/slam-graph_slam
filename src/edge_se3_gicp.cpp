@@ -4,7 +4,8 @@
 namespace graph_slam
 {
     
-EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false), max_fitness_score(1.0), position_sigma(0.001), orientation_sigma(0.0001)
+EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false), max_fitness_score(1.0), 
+                               position_sigma(0.001), orientation_sigma(0.0001), valid_gicp_measurement(false)
 {
     setGICPConfiguration(GICPConfiguration());
     
@@ -63,6 +64,8 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
         _measurement = _inverseMeasurement.inverse();
 
         _information = combineToPoseCovariance(pow(position_sigma,2) * Eigen::Matrix3d::Identity(), pow(orientation_sigma,2) * Eigen::Matrix3d::Identity()).inverse();
+        
+        valid_gicp_measurement = true;
     }
     
     run_gicp = false;

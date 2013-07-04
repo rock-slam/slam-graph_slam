@@ -51,6 +51,8 @@ public:
     
     void useGuessForGICP(bool b) {use_guess_from_state = b;}
     
+    bool hasValidGICPMeasurement() {return valid_gicp_measurement;}
+    
 protected:
     pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
     bool run_gicp;
@@ -58,6 +60,7 @@ protected:
     double max_fitness_score;
     double position_sigma;
     double orientation_sigma;
+    bool valid_gicp_measurement;
 };
 
 
