@@ -20,6 +20,9 @@ public:
     
     bool addVertex(const base::samples::RigidBodyState& rigid_body_state, envire::Pointcloud* point_cloud, bool delayed_icp_update = false);
     
+    void findNewEdges(int vertex_id);
+    void findNewEdgesForLastN(int last_n_vertices);
+    
     bool getVertexCovariance(Matrix6d& covariance, const Vertex* vertex);
     envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::VertexSE3* vertex);
     

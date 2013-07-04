@@ -104,6 +104,7 @@ bool ExtendedSparseOptimizer::addVertex(const base::samples::RigidBodyState& rig
         graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
         edge->setSourceVertex(source_vertex);
         edge->setTargetVertex(vertex);
+        edge->setGICPConfiguration(gicp_config);
         
         edge->setMeasurement(odometry_pose_delta);
         edge->setInformation(odometry_covariance_delta.inverse());
@@ -128,6 +129,81 @@ bool ExtendedSparseOptimizer::addVertex(const base::samples::RigidBodyState& rig
     
     next_vertex_id++;
     return true;
+}
+
+void ExtendedSparseOptimizer::findNewEdgesForLastN(int last_n_vertices)
+{
+    for(int i = next_vertex_id - last_n_vertices; i < next_vertex_id; i++)
+        findNewEdges(i);
+}
+
+void ExtendedSparseOptimizer::findNewEdges(int vertex_id)
+{
+    graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(vertex_id));
+    Matrix6d source_covariance;
+    if(source_vertex && getVertexCovariance(source_covariance, source_vertex))
+    {
+        for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
+        {
+            graph_slam::VertexSE3_GICP *target_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
+            if(target_vertex && (vertex_id < target_vertex->id()-1 || vertex_id > target_vertex->id()+1))
+            {
+                // check if vertecies have already an edge
+                unsigned equal_edges = 0;
+                for(g2o::HyperGraph::EdgeSet::const_iterator sv_edge = source_vertex->edges().begin(); sv_edge != source_vertex->edges().end(); sv_edge++)
+                {
+                    equal_edges += target_vertex->edges().count(*sv_edge);
+                }
+                
+                // this shouldn't happen
+                assert(equal_edges <= 1);
+                
+                Matrix6d target_covariance;
+                if(equal_edges == 0 && getVertexCovariance(target_covariance, target_vertex))
+                {
+                    // try to add a new edge
+                    Eigen::Matrix3d position_covariance = source_covariance.topLeftCorner<3,3>() + target_covariance.topLeftCorner<3,3>();
+                    // TODO: get correct covariance, for now use the identity
+                    position_covariance = Eigen::Matrix3d::Identity();
+                    
+                    double distance = computeMahalanobisDistance<double, 3>(source_vertex->estimate().translation(), 
+                                                                            position_covariance, 
+                                                                            target_vertex->estimate().translation());
+                    
+                    if(distance <= gicp_config.max_sensor_distance)
+                    {
+                        graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
+                        edge->setSourceVertex(source_vertex);
+                        edge->setTargetVertex(target_vertex);
+                        edge->setGICPConfiguration(gicp_config);
+
+                        if(!edge->setMeasurementFromGICP())
+                            throw std::runtime_error("compute transformation using gicp failed!");
+                        
+                        // add the new edge to the graph if the icp allignment was successful
+                        if(edge->hasValidGICPMeasurement())
+                        {
+                            if(!g2o::SparseOptimizer::addEdge(edge))
+                            {
+                                std::cerr << "failed to add a new edge." << std::endl;
+                                delete edge;
+                            }
+                            
+                            if(_verbose)
+                                std::cerr << "Added new edge between vertex " << source_vertex->id() << " and " << target_vertex->id() 
+                                          << ". Mahalanobis distance was " << distance << std::endl;
+                            
+                            edges_to_add.insert(edge);
+                        }
+                        else
+                        {
+                            delete edge;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 int ExtendedSparseOptimizer::optimize(int iterations, bool online)
