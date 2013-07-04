@@ -11,6 +11,8 @@ namespace graph_slam
     
     Matrix6d combineToPoseCovariance(const Eigen::Matrix3d& position_cov, const Eigen::Matrix3d& orientation_cov);
     
+    Matrix6d switchEnvireG2oCov(const Matrix6d& cov);
+    
     template<typename ScalarType, int Dim>
     double computeMahalanobisDistance(const Eigen::Matrix<ScalarType, Dim, 1>& mu, const Eigen::Matrix<ScalarType, Dim, Dim>& covariance, const Eigen::Matrix<ScalarType, Dim, 1>& x)
     {

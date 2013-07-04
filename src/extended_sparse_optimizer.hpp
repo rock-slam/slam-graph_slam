@@ -18,7 +18,7 @@ public:
     ExtendedSparseOptimizer();
     virtual ~ExtendedSparseOptimizer();
     
-    bool addVertex(const base::samples::RigidBodyState& rigid_body_state, envire::Pointcloud* point_cloud, bool delayed_icp_update = false);
+    bool addVertex(const envire::TransformWithUncertainty& transformation, envire::Pointcloud* point_cloud, bool delayed_icp_update = false);
     
     void findNewEdges(int vertex_id);
     void findNewEdgesForLastN(int last_n_vertices);

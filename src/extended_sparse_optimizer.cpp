@@ -55,7 +55,7 @@ void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& g
     }
 }
 
-bool ExtendedSparseOptimizer::addVertex(const base::samples::RigidBodyState& rigid_body_state, envire::Pointcloud* point_cloud, bool delayed_icp_update)
+bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& transformation, envire::Pointcloud* point_cloud, bool delayed_icp_update)
 {
     if(next_vertex_id == std::numeric_limits<uint64_t>::max())
     {
@@ -65,8 +65,8 @@ bool ExtendedSparseOptimizer::addVertex(const base::samples::RigidBodyState& rig
     }
     
     // get odometry pose and covariance
-    Eigen::Isometry3d odometry_pose(rigid_body_state.getTransform().matrix());
-    Matrix6d odometry_covariance = combineToPoseCovariance(rigid_body_state.cov_position, rigid_body_state.cov_orientation);
+    Eigen::Isometry3d odometry_pose(transformation.getTransform().matrix());
+    Matrix6d odometry_covariance = switchEnvireG2oCov(transformation.getCovariance());
     
     // create new vertex
     graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
@@ -278,7 +278,7 @@ envire::TransformWithUncertainty ExtendedSparseOptimizer::getEnvireTransformWith
     transform.setTransform(Eigen::Affine3d(vertex->estimate().matrix()));
     Matrix6d covariance;
     if(getVertexCovariance(covariance, vertex))
-        transform.setCovariance(covariance);
+        transform.setCovariance(switchEnvireG2oCov(covariance));
     return transform;
 }
     
