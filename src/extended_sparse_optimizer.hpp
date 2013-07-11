@@ -32,6 +32,7 @@ public:
     
     bool updateEnvireTransformations();
     
+    bool adjustOdometryPose(const base::samples::RigidBodyState& odometry_pose, base::samples::RigidBodyState& adjusted_odometry_pose) const;
     
 protected:
     
@@ -45,6 +46,7 @@ private:
     GICPConfiguration gicp_config;
     Eigen::Isometry3d odometry_pose_last_vertex;
     Matrix6d odometry_covariance_last_vertex;
+    graph_slam::VertexSE3_GICP* last_vertex;
 };
     
 } // end namespace

@@ -17,7 +17,7 @@ namespace graph_slam
 {
     
 ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer(), next_vertex_id(0), initialized(false), 
-        odometry_pose_last_vertex(Eigen::Isometry3d::Identity()), odometry_covariance_last_vertex(Matrix6d::Identity())
+        odometry_pose_last_vertex(Eigen::Isometry3d::Identity()), odometry_covariance_last_vertex(Matrix6d::Identity()), last_vertex(NULL)
 {
     setupOptimizer();
 }
@@ -83,7 +83,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
         return false;
     }
     
-    if(next_vertex_id == 0)
+    if(next_vertex_id == 0 || last_vertex == NULL)
     {
         // set first vertex fixed
         vertex->setFixed(true);
@@ -93,16 +93,15 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     }
     else
     {
-        graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(next_vertex_id-1));
         Eigen::Isometry3d odometry_pose_delta = odometry_pose_last_vertex.inverse() * odometry_pose;
         Matrix6d odometry_covariance_delta = odometry_covariance_last_vertex.inverse() * odometry_covariance;
         
         // set pose of the source vertex times odometry delta as inital pose
-        vertex->setEstimate(source_vertex->estimate() * odometry_pose_delta);
+        vertex->setEstimate(last_vertex->estimate() * odometry_pose_delta);
  
         // create an edge between the last and the new vertex
         graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
-        edge->setSourceVertex(source_vertex);
+        edge->setSourceVertex(last_vertex);
         edge->setTargetVertex(vertex);
         edge->setGICPConfiguration(gicp_config);
         
@@ -126,6 +125,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     vertices_to_add.insert(vertex);
     odometry_pose_last_vertex = odometry_pose;
     odometry_covariance_last_vertex = odometry_covariance;
+    last_vertex = vertex;
     
     next_vertex_id++;
     return true;
@@ -290,6 +290,20 @@ envire::TransformWithUncertainty ExtendedSparseOptimizer::getEnvireTransformWith
     if(getVertexCovariance(covariance, vertex))
         transform.setCovariance(switchEnvireG2oCov(covariance));
     return transform;
+}
+
+bool ExtendedSparseOptimizer::adjustOdometryPose(const base::samples::RigidBodyState& odometry_pose, base::samples::RigidBodyState& adjusted_odometry_pose) const
+{
+    if(!last_vertex)
+        return false;
+    
+    Eigen::Isometry3d adjusted_pose = last_vertex->estimate() * (odometry_pose_last_vertex.inverse() * Eigen::Isometry3d(odometry_pose.getTransform().matrix()));
+    adjusted_odometry_pose.initUnknown();
+    adjusted_odometry_pose.position = adjusted_pose.translation();
+    adjusted_odometry_pose.orientation = Eigen::Quaterniond(adjusted_pose.linear());
+    // TODO handle also covariance
+    
+    return true;
 }
     
 }
