@@ -58,9 +58,7 @@ protected:
     pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
     bool run_gicp;
     bool use_guess_from_state;
-    double max_fitness_score;
-    double position_sigma;
-    double orientation_sigma;
+    GICPConfiguration gicp_config;
     bool valid_gicp_measurement;
 };
 

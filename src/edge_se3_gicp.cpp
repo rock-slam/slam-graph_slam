@@ -4,8 +4,7 @@
 namespace graph_slam
 {
     
-EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false), max_fitness_score(1.0), 
-                               position_sigma(0.001), orientation_sigma(0.0001), valid_gicp_measurement(false)
+EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false), valid_gicp_measurement(false)
 {
     setGICPConfiguration(GICPConfiguration());
     
@@ -23,9 +22,7 @@ void EdgeSE3_GICP::setGICPConfiguration(const GICPConfiguration& gicp_config)
     icp.setCorrespondenceRandomness(gicp_config.correspondence_randomness);
     icp.setMaximumOptimizerIterations(gicp_config.maximum_optimizer_iterations);
     icp.setRotationEpsilon(gicp_config.rotation_epsilon);
-    max_fitness_score = gicp_config.max_fitness_score;
-    position_sigma = gicp_config.position_sigma;
-    orientation_sigma = gicp_config.orientation_sigma;
+    this->gicp_config = gicp_config;
 }
 
 bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
@@ -57,13 +54,14 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
     }
     
     double fitness_score = icp.getFitnessScore();
-    if(fitness_score <= max_fitness_score)
+    
+    if(icp.hasConverged() && fitness_score <= gicp_config.max_fitness_score)
     {
         Eigen::Isometry3f transformation(icp.getFinalTransformation());
         _inverseMeasurement = Eigen::Isometry3d(transformation);
         _measurement = _inverseMeasurement.inverse();
 
-        _information = combineToPoseCovariance(pow(position_sigma,2) * Eigen::Matrix3d::Identity(), pow(orientation_sigma,2) * Eigen::Matrix3d::Identity()).inverse();
+        _information = combineToPoseCovariance(pow(gicp_config.position_sigma,2) * Eigen::Matrix3d::Identity(), pow(gicp_config.orientation_sigma,2) * Eigen::Matrix3d::Identity()).inverse();
         
         valid_gicp_measurement = true;
     }
