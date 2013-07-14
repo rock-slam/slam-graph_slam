@@ -1,5 +1,6 @@
 #include "edge_se3_gicp.hpp"
 #include <graph_slam/matrix_helper.hpp>
+#include <graph_slam/pointcloud_helper.hpp>
 
 namespace graph_slam
 {
@@ -33,34 +34,47 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
         return true;
     }
     
-    if(icp.getInputTarget().get() == NULL || icp.getInputCloud().get() == NULL)
+    graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(_vertices[0]);
+    graph_slam::VertexSE3_GICP *target_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(_vertices[1]);
+    
+    if(source_vertex == NULL || target_vertex == NULL)
         return false;
+    
+    typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
+    typedef typename PCLPointCloud::Ptr PCLPointCloudPtr;
+    PCLPointCloudPtr source_cloud(new PCLPointCloud);
+    PCLPointCloudPtr target_cloud(new PCLPointCloud);
+    envire::Pointcloud* envire_source_cloud = dynamic_cast<envire::Pointcloud*>(source_vertex->getEnvirePointCloud().get());
+    envire::Pointcloud* envire_target_cloud = dynamic_cast<envire::Pointcloud*>(target_vertex->getEnvirePointCloud().get());
+    if(envire_source_cloud == NULL || envire_target_cloud == NULL)
+        return false;
+    
+    // compute current transformation guess
+    Eigen::Isometry3d transfomation_guess = source_vertex->estimate().inverse() * target_vertex->estimate();
+    
+    // set source cloud
+    vectorToPCLPointCloud(envire_source_cloud->vertices, *source_cloud.get(), gicp_config.point_cloud_density);
+    icp.setInputCloud(source_cloud);
+    
+    // transform target cloud in the source cloud frame
+    std::vector<Eigen::Vector3d> transformed_target_cloud;
+    transformPointCloud(envire_target_cloud->vertices, transformed_target_cloud, transfomation_guess);
+    
+    // set target cloud
+    vectorToPCLPointCloud(transformed_target_cloud, *target_cloud.get());
+    icp.setInputTarget(target_cloud);
     
     // Perform the alignment
     pcl::PointCloud<pcl::PointXYZ> cloud_source_registered;
-    if(use_guess_from_state)
-    {
-        /* NOTE gicp seems to be broken when a inital guess is given
-        if(_inverseMeasurement.matrix() == Eigen::Isometry3d::Identity().matrix())
-            setMeasurementFromOdometry();
-        Eigen::Matrix4f guess = Eigen::Isometry3f(_inverseMeasurement).matrix();
-        icp.align(cloud_source_registered, guess);
-        */
-        icp.align(cloud_source_registered, Eigen::Matrix4f::Identity());
-    }
-    else
-    {
-        icp.align(cloud_source_registered);
-    }
-    
+    icp.align(cloud_source_registered);
     double fitness_score = icp.getFitnessScore();
     
     if(icp.hasConverged() && fitness_score <= gicp_config.max_fitness_score)
     {
         Eigen::Isometry3f transformation(icp.getFinalTransformation());
-        _inverseMeasurement = Eigen::Isometry3d(transformation);
-        _measurement = _inverseMeasurement.inverse();
-
+        
+        _measurement = Eigen::Isometry3d(transformation).inverse() * transfomation_guess;
+        _inverseMeasurement = _measurement.inverse();
         _information = combineToPoseCovariance(pow(gicp_config.position_sigma,2) * Eigen::Matrix3d::Identity(), pow(gicp_config.orientation_sigma,2) * Eigen::Matrix3d::Identity()).inverse();
         
         valid_gicp_measurement = true;
