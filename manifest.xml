@@ -16,4 +16,6 @@
     <rosdep name="blas" />
     <rosdep name="cholmod" />
     <rosdep name="csparse" />
+    
+    <tags>needs_opt</tags>
 </package>
