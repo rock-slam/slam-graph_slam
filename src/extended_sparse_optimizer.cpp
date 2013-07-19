@@ -68,6 +68,18 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     Eigen::Isometry3d odometry_pose(transformation.getTransform().matrix());
     Matrix6d odometry_covariance = switchEnvireG2oCov(transformation.getCovariance());
     
+    // check for nan values
+    if(is_nan(odometry_pose.matrix()))
+    {
+        throw std::runtime_error("Odometry pose matrix contains not numerical entries!");
+        return false;
+    }
+    else if(is_nan(odometry_covariance))
+    {
+        throw std::runtime_error("Odometry covaraince matrix contains not numerical entries!");
+        return false;
+    }
+    
     // create new vertex
     graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
     vertex->setId(next_vertex_id);

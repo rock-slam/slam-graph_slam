@@ -20,6 +20,12 @@ namespace graph_slam
         return sqrt((diff.transpose() * covariance.inverse() * diff)(0,0));
     }
     
+    template<typename Derived>
+    inline bool is_nan(const Eigen::MatrixBase<Derived>& x)
+    {
+        return !((x.array() == x.array())).all();
+    }
+    
 } // end namespace
 
 #endif
