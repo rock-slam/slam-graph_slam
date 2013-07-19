@@ -40,7 +40,7 @@ private:
     void setupOptimizer();
     
     bool initialized;
-    uint64_t next_vertex_id;
+    int next_vertex_id;
     g2o::HyperGraph::VertexSet vertices_to_add;
     g2o::HyperGraph::EdgeSet edges_to_add;
     GICPConfiguration gicp_config;

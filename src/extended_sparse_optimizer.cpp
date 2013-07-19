@@ -57,7 +57,7 @@ void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& g
 
 bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& transformation, envire::Pointcloud* point_cloud, bool delayed_icp_update)
 {
-    if(next_vertex_id == std::numeric_limits<uint64_t>::max())
+    if(next_vertex_id == std::numeric_limits<int>::max())
     {
         // this should not happen under normal circumstances
         throw std::runtime_error("Can't add any new vertex. Max id count has been reached.");
