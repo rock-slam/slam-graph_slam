@@ -20,8 +20,9 @@ public:
     
     bool addVertex(const envire::TransformWithUncertainty& transformation, envire::Pointcloud* point_cloud, bool delayed_icp_update = false);
     
-    void findNewEdges(int vertex_id);
-    void findNewEdgesForLastN(unsigned last_n_vertices);
+    void findEdgeCandidates(int vertex_id);
+    void findEdgeCandidates();
+    void tryBestEdgeCandidate();
     
     bool getVertexCovariance(Matrix6d& covariance, const Vertex* vertex);
     envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::VertexSE3* vertex);
@@ -47,6 +48,7 @@ private:
     Eigen::Isometry3d odometry_pose_last_vertex;
     Matrix6d odometry_covariance_last_vertex;
     graph_slam::VertexSE3_GICP* last_vertex;
+    bool new_edges_added;
 };
     
 } // end namespace

@@ -17,7 +17,8 @@ namespace graph_slam
 {
     
 ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer(), next_vertex_id(0), initialized(false), 
-        odometry_pose_last_vertex(Eigen::Isometry3d::Identity()), odometry_covariance_last_vertex(Matrix6d::Identity()), last_vertex(NULL)
+        odometry_pose_last_vertex(Eigen::Isometry3d::Identity()), odometry_covariance_last_vertex(Matrix6d::Identity()), last_vertex(NULL),
+        new_edges_added(false)
 {
     setupOptimizer();
 }
@@ -143,23 +144,20 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     return true;
 }
 
-void ExtendedSparseOptimizer::findNewEdgesForLastN(unsigned last_n_vertices)
+void ExtendedSparseOptimizer::findEdgeCandidates()
 {
-    unsigned ids = 0;
-    std::set<int> sorted_vertex_ids;
     for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
-        sorted_vertex_ids.insert((*it)->id());
-    
-    for(std::set<int>::const_reverse_iterator it = sorted_vertex_ids.rbegin(); it != sorted_vertex_ids.rend(); it++)
     {
-        findNewEdges(*it);
-        ids++;
-        if(ids == last_n_vertices)
-            break;
+        graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
+        if(vertex && !vertex->getEdgeSearchState().has_run)
+        {
+            findEdgeCandidates(vertex->id());
+        }
+        // TODO add a check for vertecies, if the pose has significantly changed
     }
 }
 
-void ExtendedSparseOptimizer::findNewEdges(int vertex_id)
+void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id)
 {
     graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(vertex_id));
     Matrix6d source_covariance;
@@ -177,7 +175,7 @@ void ExtendedSparseOptimizer::findNewEdges(int vertex_id)
                     equal_edges += target_vertex->edges().count(*sv_edge);
                 }
                 
-                // this shouldn't happen
+                // there should never be more than one edge between two vertecies
                 assert(equal_edges <= 1);
                 
                 Matrix6d target_covariance;
@@ -194,36 +192,78 @@ void ExtendedSparseOptimizer::findNewEdges(int vertex_id)
                     
                     if(distance <= gicp_config.max_sensor_distance)
                     {
-                        graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
-                        edge->setSourceVertex(source_vertex);
-                        edge->setTargetVertex(target_vertex);
-                        edge->setGICPConfiguration(gicp_config);
-
-                        if(!edge->setMeasurementFromGICP())
-                            throw std::runtime_error("compute transformation using gicp failed!");
-                        
-                        // add the new edge to the graph if the icp allignment was successful
-                        if(edge->hasValidGICPMeasurement())
-                        {
-                            if(!g2o::SparseOptimizer::addEdge(edge))
-                            {
-                                std::cerr << "failed to add a new edge." << std::endl;
-                                delete edge;
-                            }
-                            
-                            if(_verbose)
-                                std::cerr << "Added new edge between vertex " << source_vertex->id() << " and " << target_vertex->id() 
-                                          << ". Mahalanobis distance was " << distance << std::endl;
-                            
-                            edges_to_add.insert(edge);
-                        }
-                        else
-                        {
-                            delete edge;
-                        }
+                        source_vertex->addEdgeCandidate(target_vertex->id(), distance);
+                        target_vertex->addEdgeCandidate(source_vertex->id(), distance);
+                        new_edges_added = true;
                     }
                 }
             }
+        }
+        // save search pose
+        source_vertex->setEdgeSearchState(true, source_vertex->estimate());
+    }
+}
+
+void ExtendedSparseOptimizer::tryBestEdgeCandidate()
+{
+    if(!new_edges_added)
+        return;
+    
+    double vertex_error = 0.0;
+    graph_slam::VertexSE3_GICP* source_vertex = NULL;
+    for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
+    {
+        graph_slam::VertexSE3_GICP* vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
+        if(vertex && vertex->getMissingEdgesError() > vertex_error)
+        {
+            vertex_error = vertex->getMissingEdgesError();
+            source_vertex = vertex;
+        }
+    }
+    
+    if(vertex_error == 0.0)
+    {
+        new_edges_added = false;
+        return;
+    }
+    
+    VertexSE3_GICP::EdgeCandidate candidate;
+    int target_id;
+    if(source_vertex && source_vertex->getBestEdgeCandidate(candidate, target_id))
+    {
+        graph_slam::VertexSE3_GICP *target_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(target_id));
+        if(!target_vertex)
+            return;
+        
+        graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
+        edge->setSourceVertex(source_vertex);
+        edge->setTargetVertex(target_vertex);
+        edge->setGICPConfiguration(gicp_config);
+
+        if(!edge->setMeasurementFromGICP())
+            throw std::runtime_error("compute transformation using gicp failed!");
+        
+        // add the new edge to the graph if the icp allignment was successful
+        if(edge->hasValidGICPMeasurement())
+        {
+            if(!g2o::SparseOptimizer::addEdge(edge))
+            {
+                std::cerr << "failed to add a new edge." << std::endl;
+                delete edge;
+            }
+            else if(_verbose)
+                std::cerr << "Added new edge between vertex " << source_vertex->id() << " and " << target_vertex->id() 
+                            << ". Mahalanobis distance was " << candidate.mahalanobis_distance << ", edge error was " << candidate.error << std::endl;
+            
+            edges_to_add.insert(edge);
+            source_vertex->removeEdgeCandidate(target_id);
+            target_vertex->removeEdgeCandidate(source_vertex->id());
+        }
+        else
+        {
+            delete edge;
+            source_vertex->updateEdgeCandidate(target_id, true);
+            target_vertex->updateEdgeCandidate(source_vertex->id(), true);
         }
     }
 }
