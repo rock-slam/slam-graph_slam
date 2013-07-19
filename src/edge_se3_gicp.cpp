@@ -108,13 +108,11 @@ void EdgeSE3_GICP::linearizeOplus()
 void EdgeSE3_GICP::setSourceVertex(VertexSE3_GICP* source)
 {
     _vertices[0]=source;
-    icp.setInputCloud(source->getPCLPointCloud());
 }
 
 void EdgeSE3_GICP::setTargetVertex(VertexSE3_GICP* target)
 {
     _vertices[1]=target;
-    icp.setInputTarget(target->getPCLPointCloud());
 }
 
 }

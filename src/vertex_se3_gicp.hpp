@@ -2,11 +2,8 @@
 #define GRAPH_SLAM_VERTEX_SE3_GICP_H
 
 #include <g2o/types/slam3d/vertex_se3.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
 #include <envire/maps/Pointcloud.hpp>
 #include <base/samples/rigid_body_state.h>
-#include <graph_slam/matrix_helper.hpp>
 
 namespace graph_slam 
 {
@@ -14,19 +11,14 @@ namespace graph_slam
 class VertexSE3_GICP : public g2o::VertexSE3
 {
 public:
-    typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
-    typedef typename PCLPointCloud::Ptr PCLPointCloudPtr;
-    typedef typename PCLPointCloud::ConstPtr PCLPointCloudConstPtr;
     
     VertexSE3_GICP();
-    void attachPointCloud(envire::Pointcloud* point_cloud, double density = 1.0);
+    void attachPointCloud(envire::Pointcloud* point_cloud);
     void detachPointCloud();
-    PCLPointCloudConstPtr getPCLPointCloud() const;
     envire::EnvironmentItem::Ptr getEnvirePointCloud() const;
     
 protected:
     envire::EnvironmentItem::Ptr envire_pointcloud;
-    PCLPointCloudPtr pcl_point_cloud;
 };
 
 

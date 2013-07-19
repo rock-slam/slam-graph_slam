@@ -73,7 +73,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     vertex->setId(next_vertex_id);
     
     // attach point cloud to vertex
-    vertex->attachPointCloud(point_cloud, gicp_config.point_cloud_density);
+    vertex->attachPointCloud(point_cloud);
     
     // added vertex to the graph
     if(!g2o::SparseOptimizer::addVertex(vertex))
