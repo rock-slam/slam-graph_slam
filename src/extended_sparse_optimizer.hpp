@@ -35,6 +35,8 @@ public:
     
     bool adjustOdometryPose(const base::samples::RigidBodyState& odometry_pose, base::samples::RigidBodyState& adjusted_odometry_pose) const;
     
+    void dumpGraphViz(std::ostream& os);
+    
 protected:
     
 private:

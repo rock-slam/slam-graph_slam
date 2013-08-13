@@ -357,5 +357,32 @@ bool ExtendedSparseOptimizer::adjustOdometryPose(const base::samples::RigidBodyS
     
     return true;
 }
+
+void ExtendedSparseOptimizer::dumpGraphViz(std::ostream& os)
+{
+    os << "digraph G {" << std::endl;
+    for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
+    {
+        graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
+        if(source_vertex)
+        {
+            const Eigen::Isometry3d& pose = source_vertex->estimate();
+            os << "  v" << source_vertex->id() << " [pos=\"" << pose.translation().x() << "," << pose.translation().y() << "\"];" << std::endl;
+        }
+    }
+    for(g2o::OptimizableGraph::EdgeContainer::iterator edge = _activeEdges.begin(); edge != _activeEdges.end(); edge++)
+    {
+        os << "  v" << (*edge)->vertices()[0]->id() << " -> " << "v" << (*edge)->vertices()[1]->id() << " ";
+        os << "[";
+        
+        graph_slam::EdgeSE3_GICP* edge_icp = dynamic_cast<graph_slam::EdgeSE3_GICP*>(*edge);
+        if(edge_icp && !edge_icp->hasValidGICPMeasurement())
+            os << "color=red";
+        
+        os << "]";
+        os << ";" << std::endl;
+    }
+    os << "}" << std::endl;
+}
     
 }
