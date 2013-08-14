@@ -25,7 +25,7 @@ rock_library(graph_slam
         extended_sparse_optimizer.hpp
         matrix_helper.hpp
     DEPS_PKGCONFIG 
-        envire base-types hogman stereo g2o pcl_registration-1.6
+        envire base-types hogman stereo g2o pcl_registration-1.7
     DEPS_CMAKE
         CSparse Cholmod BLAS LAPACK
     )
