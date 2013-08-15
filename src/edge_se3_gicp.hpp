@@ -40,6 +40,8 @@ public:
     void computeError();
     
     bool setMeasurementFromGICP(bool delayed = false);
+
+    Eigen::Isometry3d getMeasurement() {return _measurement;}
     
     void linearizeOplus();
     
