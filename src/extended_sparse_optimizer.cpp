@@ -121,7 +121,6 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
         edge->setMeasurement(odometry_pose_delta);
         edge->setInformation(odometry_covariance_delta.inverse());
 
-        // compute icp transformation
         if(!edge->setMeasurementFromGICP(delayed_icp_update))
             throw std::runtime_error("compute transformation using gicp failed!");
         
@@ -133,16 +132,6 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
             delete vertex;
             return false;
         }
-
-        // set new pose if valid icp measurment is available
-        if(edge->hasValidGICPMeasurement())
-        {
-            vertex->setEstimate(last_vertex->estimate() * edge->getMeasurement());
-            envire::FrameNode* framenode = point_cloud->getFrameNode();
-            if(framenode)
-                framenode->setTransform(getEnvireTransformWithUncertainty(vertex));
-        }
-
         edges_to_add.insert(edge);
     }
     
