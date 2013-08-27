@@ -6,7 +6,9 @@
 #include <graph_slam/edge_se3_gicp.hpp>
 #include <graph_slam/matrix_helper.hpp>
 #include <envire/core/Transform.hpp>
-
+#include <boost/shared_ptr.hpp>
+#include <envire/core/Environment.hpp>
+#include <envire/operators/MLSProjection.hpp>
 
 namespace graph_slam 
 {
@@ -17,8 +19,11 @@ public:
     
     ExtendedSparseOptimizer();
     virtual ~ExtendedSparseOptimizer();
+
+    virtual int optimize(int iterations, bool online = false);
+    virtual void clear();
     
-    bool addVertex(const envire::TransformWithUncertainty& transformation, envire::Pointcloud* point_cloud, bool delayed_icp_update = false);
+    bool addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, bool delayed_icp_update = false);
     
     void findEdgeCandidates(int vertex_id);
     void findEdgeCandidates();
@@ -26,12 +31,12 @@ public:
     
     bool getVertexCovariance(Matrix6d& covariance, const Vertex* vertex);
     envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::VertexSE3* vertex);
+
+    bool setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y);
+    bool updateEnvire();
+    boost::shared_ptr<envire::Environment> getEnvironment() {return env;};
     
     void updateGICPConfiguration(const GICPConfiguration& gicp_config);
-    
-    virtual int optimize(int iterations, bool online = false);
-    
-    bool updateEnvireTransformations();
     
     bool adjustOdometryPose(const base::samples::RigidBodyState& odometry_pose, base::samples::RigidBodyState& adjusted_odometry_pose) const;
     
@@ -41,6 +46,7 @@ protected:
     
 private:
     void setupOptimizer();
+    void initValues();
     
     bool initialized;
     int next_vertex_id;
@@ -51,6 +57,9 @@ private:
     Matrix6d odometry_covariance_last_vertex;
     graph_slam::VertexSE3_GICP* last_vertex;
     bool new_edges_added;
+    boost::shared_ptr<envire::Environment> env;
+    boost::shared_ptr<envire::MLSProjection> projection;
+    bool use_mls;
 };
     
 } // end namespace

@@ -12,19 +12,43 @@
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
 
+#include <envire/maps/Pointcloud.hpp>
+#include <envire/maps/MLSGrid.hpp>
 
 namespace graph_slam 
 {
     
-ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer(), next_vertex_id(0), initialized(false), 
-        odometry_pose_last_vertex(Eigen::Isometry3d::Identity()), odometry_covariance_last_vertex(Matrix6d::Identity()), last_vertex(NULL),
-        new_edges_added(false)
+ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer()
 {
+    initValues();
     setupOptimizer();
+    env.reset(new envire::Environment);
 }
 
 ExtendedSparseOptimizer::~ExtendedSparseOptimizer()
 {
+}
+
+void ExtendedSparseOptimizer::initValues()
+{
+    next_vertex_id = 0;
+    initialized = false;
+    odometry_pose_last_vertex = Eigen::Isometry3d::Identity();
+    odometry_covariance_last_vertex = Matrix6d::Identity();
+    last_vertex = NULL;
+    new_edges_added = false;
+    use_mls = false;
+}
+
+void ExtendedSparseOptimizer::clear()
+{
+    initValues();
+    env.reset(new envire::Environment);
+    projection.reset();
+    vertices_to_add.clear();
+    edges_to_add.clear();
+
+    SparseOptimizer::clear();
 }
 
 void ExtendedSparseOptimizer::setupOptimizer()
@@ -56,7 +80,7 @@ void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& g
     }
 }
 
-bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& transformation, envire::Pointcloud* point_cloud, bool delayed_icp_update)
+bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, bool delayed_icp_update)
 {
     if(next_vertex_id == std::numeric_limits<int>::max())
     {
@@ -86,13 +110,16 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     vertex->setId(next_vertex_id);
     
     // attach point cloud to vertex
-    vertex->attachPointCloud(point_cloud);
+    envire::Pointcloud* envire_pointcloud = new envire::Pointcloud();
+    envire_pointcloud->vertices = pointcloud;
+    vertex->attachPointCloud(envire_pointcloud);
     
     // added vertex to the graph
     if(!g2o::SparseOptimizer::addVertex(vertex))
     {
         std::cerr << "failed to add a new vertex." << std::endl;
         delete vertex;
+        delete envire_pointcloud;
         return false;
     }
     
@@ -130,11 +157,20 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
             g2o::SparseOptimizer::removeVertex(vertex);
             delete edge;
             delete vertex;
+            delete envire_pointcloud;
             return false;
         }
         edges_to_add.insert(edge);
     }
     
+    // add pointcloud to environment
+    envire::FrameNode* framenode = new envire::FrameNode();
+    framenode->setTransform(Eigen::Affine3d(vertex->estimate().matrix()));
+    env->addChild(env->getRootNode(), framenode);
+    env->setFrameNode(envire_pointcloud, framenode);
+    if(use_mls)
+        env->addInput(projection.get(), envire_pointcloud);
+
     vertices_to_add.insert(vertex);
     odometry_pose_last_vertex = odometry_pose;
     odometry_covariance_last_vertex = odometry_covariance;
@@ -293,8 +329,36 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
     return g2o::SparseOptimizer::optimize(iterations, online);
 }
 
-bool ExtendedSparseOptimizer::updateEnvireTransformations()
+bool ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y)
 {
+    if(use_mls && projection.use_count() == 0)
+    {
+        double grid_count_x = grid_size_x / cell_resolution_x;
+        double grid_count_y = grid_size_y / cell_resolution_y;
+        envire::MultiLevelSurfaceGrid* mls = new envire::MultiLevelSurfaceGrid(grid_count_y, grid_count_x, cell_resolution_x, cell_resolution_y, -0.5 * grid_size_x, -0.5 * grid_size_y);
+        projection.reset(new envire::MLSProjection());
+        env->attachItem(mls);
+        envire::FrameNode *fn = new envire::FrameNode();
+        env->getRootNode()->addChild(fn);
+        mls->setFrameNode(fn);
+        env->addOutput(projection.get(), mls);
+        this->use_mls = true;
+    }
+    else if(use_mls && projection.use_count() > 0)
+    {
+        this->use_mls = true;
+    }
+    else if(!use_mls && projection.use_count() > 0)
+    {
+        envire::MultiLevelSurfaceGrid* mls = env->getOutput<envire::MultiLevelSurfaceGrid*>(projection.get());
+        mls->clear();
+        this->use_mls = false;
+    }
+}
+
+bool ExtendedSparseOptimizer::updateEnvire()
+{
+    // update framenodes
     unsigned err_counter = 0;
     for(VertexIDMap::const_iterator it = _vertices.begin(); it != _vertices.end(); it++)
     {
@@ -314,6 +378,10 @@ bool ExtendedSparseOptimizer::updateEnvireTransformations()
         }
         err_counter++;
     }
+
+    if(use_mls)
+        projection->updateAll();
+
     return !err_counter;
 }
 
@@ -325,7 +393,7 @@ bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2
         computeMarginals(spinv, vertex);
         if(vertex->hessianIndex() >= spinv.blockCols().size())
             return false;
-        Eigen::MatrixXd* vertex_cov = spinv.blockCols()[vertex->hessianIndex()].at(vertex->hessianIndex());
+        Eigen::MatrixXd* vertex_cov = spinv.block(vertex->hessianIndex(), vertex->hessianIndex());
         if(!vertex_cov)
             return false;
         covariance = Matrix6d(*vertex_cov);
