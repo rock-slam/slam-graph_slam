@@ -31,6 +31,7 @@ public:
     VertexSE3_GICP();
     void attachPointCloud(envire::Pointcloud* point_cloud);
     void detachPointCloud();
+    bool hasPointcloudAttached() const {return pointcloud_attached;};
     envire::EnvironmentItem::Ptr getEnvirePointCloud() const;
     
     void addEdgeCandidate(int vertex_id, double mahalanobis_distance);
@@ -47,6 +48,7 @@ protected:
     EdgeCandidates edge_candidates;
     EdgeSearchState search_state;
     double missing_edges_error;
+    bool pointcloud_attached;
 };
 
 

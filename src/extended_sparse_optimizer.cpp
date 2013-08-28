@@ -185,7 +185,7 @@ void ExtendedSparseOptimizer::findEdgeCandidates()
     for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
     {
         graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
-        if(vertex && !vertex->getEdgeSearchState().has_run)
+        if(vertex && vertex->hasPointcloudAttached() && !vertex->getEdgeSearchState().has_run)
         {
             findEdgeCandidates(vertex->id());
         }
@@ -197,12 +197,12 @@ void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id)
 {
     graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(vertex_id));
     Matrix6d source_covariance;
-    if(source_vertex && getVertexCovariance(source_covariance, source_vertex))
+    if(source_vertex && source_vertex->hasPointcloudAttached() && getVertexCovariance(source_covariance, source_vertex))
     {
         for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
         {
             graph_slam::VertexSE3_GICP *target_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
-            if(target_vertex && (vertex_id < target_vertex->id()-1 || vertex_id > target_vertex->id()+1))
+            if(target_vertex && target_vertex->hasPointcloudAttached() && (vertex_id < target_vertex->id()-1 || vertex_id > target_vertex->id()+1))
             {
                 // check if vertecies have already an edge
                 unsigned equal_edges = 0;
@@ -240,66 +240,76 @@ void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id)
     }
 }
 
-void ExtendedSparseOptimizer::tryBestEdgeCandidate()
+void ExtendedSparseOptimizer::tryBestEdgeCandidates(unsigned count)
 {
     if(!new_edges_added)
         return;
-    
-    double vertex_error = 0.0;
-    graph_slam::VertexSE3_GICP* source_vertex = NULL;
-    for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
-    {
-        graph_slam::VertexSE3_GICP* vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
-        if(vertex && vertex->getMissingEdgesError() > vertex_error)
-        {
-            vertex_error = vertex->getMissingEdgesError();
-            source_vertex = vertex;
-        }
-    }
-    
-    if(vertex_error == 0.0)
-    {
-        new_edges_added = false;
-        return;
-    }
-    
-    VertexSE3_GICP::EdgeCandidate candidate;
-    int target_id;
-    if(source_vertex && source_vertex->getBestEdgeCandidate(candidate, target_id))
-    {
-        graph_slam::VertexSE3_GICP *target_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(target_id));
-        if(!target_vertex)
-            return;
-        
-        graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
-        edge->setSourceVertex(source_vertex);
-        edge->setTargetVertex(target_vertex);
-        edge->setGICPConfiguration(gicp_config);
 
-        if(!edge->setMeasurementFromGICP())
-            throw std::runtime_error("compute transformation using gicp failed!");
-        
-        // add the new edge to the graph if the icp allignment was successful
-        if(edge->hasValidGICPMeasurement())
+    unsigned edge_candidates_tested = 0;
+    while(edge_candidates_tested < count)
+    {
+        // get vertex with highest missing edge error
+        double vertex_error = 0.0;
+        graph_slam::VertexSE3_GICP* source_vertex = NULL;
+        for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
         {
-            if(!g2o::SparseOptimizer::addEdge(edge))
+            graph_slam::VertexSE3_GICP* vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
+            if(vertex && vertex->hasPointcloudAttached() && vertex->getMissingEdgesError() > vertex_error)
             {
-                std::cerr << "failed to add a new edge." << std::endl;
-                delete edge;
+                vertex_error = vertex->getMissingEdgesError();
+                source_vertex = vertex;
             }
-            else if(_verbose)
-                std::cerr << "Added new edge between vertex " << source_vertex->id() << " and " << target_vertex->id() 
-                            << ". Mahalanobis distance was " << candidate.mahalanobis_distance << ", edge error was " << candidate.error << std::endl;
-            
-            edges_to_add.insert(edge);
-            source_vertex->removeEdgeCandidate(target_id);
-            target_vertex->removeEdgeCandidate(source_vertex->id());
         }
-        else
+        
+        if(vertex_error == 0.0)
         {
-            delete edge;
-            source_vertex->updateEdgeCandidate(target_id, true);
-            target_vertex->updateEdgeCandidate(source_vertex->id(), true);
+            new_edges_added = false;
+            return;
+        }
+        
+        VertexSE3_GICP::EdgeCandidate candidate;
+        int target_id;
+        if(source_vertex && source_vertex->getBestEdgeCandidate(candidate, target_id))
+        {
+            graph_slam::VertexSE3_GICP *target_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(target_id));
+
+            if(!target_vertex || !target_vertex->hasPointcloudAttached())
+            {
+                source_vertex->removeEdgeCandidate(target_id);
+                continue;
+            }
+            
+            graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
+            edge->setSourceVertex(source_vertex);
+            edge->setTargetVertex(target_vertex);
+            edge->setGICPConfiguration(gicp_config);
+
+            if(!edge->setMeasurementFromGICP())
+                throw std::runtime_error("compute transformation using gicp failed!");
+            
+            // add the new edge to the graph if the icp allignment was successful
+            if(edge->hasValidGICPMeasurement())
+            {
+                if(!g2o::SparseOptimizer::addEdge(edge))
+                {
+                    std::cerr << "failed to add a new edge." << std::endl;
+                    delete edge;
+                }
+                else if(_verbose)
+                    std::cerr << "Added new edge between vertex " << source_vertex->id() << " and " << target_vertex->id() 
+                                << ". Mahalanobis distance was " << candidate.mahalanobis_distance << ", edge error was " << candidate.error << std::endl;
+                
+                edges_to_add.insert(edge);
+                source_vertex->removeEdgeCandidate(target_id);
+                target_vertex->removeEdgeCandidate(source_vertex->id());
+            }
+            else
+            {
+                delete edge;
+                source_vertex->updateEdgeCandidate(target_id, true);
+                target_vertex->updateEdgeCandidate(source_vertex->id(), true);
+            }
+            edge_candidates_tested++;
         }
     }
 }
@@ -329,7 +339,7 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
     return g2o::SparseOptimizer::optimize(iterations, online);
 }
 
-bool ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y)
+void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y)
 {
     if(use_mls && projection.use_count() == 0)
     {
@@ -365,6 +375,8 @@ bool ExtendedSparseOptimizer::updateEnvire()
         graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(it->second);
         if(vertex)
         {
+            if(!vertex->hasPointcloudAttached())
+                continue;
             envire::CartesianMap* map = dynamic_cast<envire::CartesianMap*>(vertex->getEnvirePointCloud().get());
             if(map)
             {
@@ -387,11 +399,11 @@ bool ExtendedSparseOptimizer::updateEnvire()
 
 bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2o::OptimizableGraph::Vertex* vertex)
 {
-    if(vertex && vertex->hessianIndex() >= 0)
+    if(vertex && isHandledByOptimizer(vertex))
     {
         g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
         computeMarginals(spinv, vertex);
-        if(vertex->hessianIndex() >= spinv.blockCols().size())
+        if(vertex->hessianIndex() >= (int)spinv.blockCols().size())
             return false;
         Eigen::MatrixXd* vertex_cov = spinv.block(vertex->hessianIndex(), vertex->hessianIndex());
         if(!vertex_cov)
@@ -402,10 +414,12 @@ bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2
     return false;
 }
 
-envire::TransformWithUncertainty ExtendedSparseOptimizer::getEnvireTransformWithUncertainty(const g2o::VertexSE3* vertex)
+envire::TransformWithUncertainty ExtendedSparseOptimizer::getEnvireTransformWithUncertainty(const g2o::OptimizableGraph::Vertex* vertex)
 {
     envire::TransformWithUncertainty transform = envire::TransformWithUncertainty::Identity();
-    transform.setTransform(Eigen::Affine3d(vertex->estimate().matrix()));
+    const graph_slam::VertexSE3_GICP *vertex_se3 = dynamic_cast<const graph_slam::VertexSE3_GICP*>(vertex);
+    if(vertex_se3)
+        transform.setTransform(Eigen::Affine3d(vertex_se3->estimate().matrix()));
     Matrix6d covariance;
     if(getVertexCovariance(covariance, vertex))
         transform.setCovariance(switchEnvireG2oCov(covariance));

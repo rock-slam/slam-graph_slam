@@ -5,7 +5,7 @@
 namespace graph_slam
 {
     
-VertexSE3_GICP::VertexSE3_GICP() : VertexSE3(), missing_edges_error(0.0)
+VertexSE3_GICP::VertexSE3_GICP() : VertexSE3(), missing_edges_error(0.0), pointcloud_attached(false)
 {
 
 }
@@ -13,11 +13,13 @@ VertexSE3_GICP::VertexSE3_GICP() : VertexSE3(), missing_edges_error(0.0)
 void VertexSE3_GICP::attachPointCloud(envire::Pointcloud* point_cloud)
 {
     envire_pointcloud.reset(point_cloud);
+    pointcloud_attached = true;
 }
 
 void VertexSE3_GICP::detachPointCloud()
 {
     envire_pointcloud.reset();
+    pointcloud_attached = false;
 }
 
 envire::EnvironmentItem::Ptr VertexSE3_GICP::getEnvirePointCloud() const

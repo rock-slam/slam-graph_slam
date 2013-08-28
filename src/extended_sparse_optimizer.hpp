@@ -27,12 +27,12 @@ public:
     
     void findEdgeCandidates(int vertex_id);
     void findEdgeCandidates();
-    void tryBestEdgeCandidate();
+    void tryBestEdgeCandidates(unsigned count = 1);
     
-    bool getVertexCovariance(Matrix6d& covariance, const Vertex* vertex);
-    envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::VertexSE3* vertex);
+    bool getVertexCovariance(Matrix6d& covariance, const g2o::OptimizableGraph::Vertex* vertex);
+    envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::OptimizableGraph::Vertex* vertex);
 
-    bool setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y);
+    void setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y);
     bool updateEnvire();
     boost::shared_ptr<envire::Environment> getEnvironment() {return env;};
     
@@ -47,6 +47,7 @@ protected:
 private:
     void setupOptimizer();
     void initValues();
+    bool isHandledByOptimizer(const g2o::OptimizableGraph::Vertex* vertex) const {return vertex->hessianIndex() >= 0;};
     
     bool initialized;
     int next_vertex_id;
