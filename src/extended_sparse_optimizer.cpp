@@ -180,6 +180,38 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     return true;
 }
 
+bool ExtendedSparseOptimizer::removeVertex(int vertex_id)
+{
+    graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(vertex_id));
+    if(vertex && isHandledByOptimizer(vertex))
+    {
+        removePointcloudFromVertex(vertex_id);
+        //TODO
+        
+    }
+    return false;
+}
+
+bool ExtendedSparseOptimizer::removePointcloudFromVertex(int vertex_id)
+{
+    graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(vertex_id));
+    if(vertex && isHandledByOptimizer(vertex) && vertex->hasPointcloudAttached())
+    {
+        // remove pointcloud from vertex
+        envire::EnvironmentItem::Ptr envire_item = vertex->getEnvirePointCloud();
+        envire::Pointcloud* envire_pointcloud = dynamic_cast<envire::Pointcloud*>(envire_item.get());
+        vertex->detachPointCloud();
+
+        // remove pointcloud from envire
+        if(use_mls)
+            env->removeInput(projection.get(), envire_pointcloud);
+        envire::FrameNode* fn = envire_pointcloud->getFrameNode();
+        env->detachItem(fn, true);
+        return true;
+    }
+    return false;
+}
+
 void ExtendedSparseOptimizer::findEdgeCandidates()
 {
     for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)

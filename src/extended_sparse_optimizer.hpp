@@ -24,6 +24,8 @@ public:
     virtual void clear();
     
     bool addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, bool delayed_icp_update = false);
+    bool removePointcloudFromVertex(int vertex_id);
+    bool removeVertex(int vertex_id);
     
     void findEdgeCandidates(int vertex_id);
     void findEdgeCandidates();
