@@ -5,6 +5,7 @@
 #include <base/samples/rigid_body_state.h>
 #include <graph_slam/edge_se3_gicp.hpp>
 #include <graph_slam/matrix_helper.hpp>
+#include <graph_slam/vertex_grid.hpp>
 #include <envire/core/Transform.hpp>
 #include <boost/shared_ptr.hpp>
 #include <envire/core/Environment.hpp>
@@ -26,6 +27,9 @@ public:
     bool addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, bool delayed_icp_update = false);
     bool removePointcloudFromVertex(int vertex_id);
     bool removeVertex(int vertex_id);
+
+    void setupMaxVertexGrid(unsigned max_vertices_per_cell, double grid_size_x, double grid_size_y, double cell_resolution);
+    void removeVerticesFromGrid();
     
     void findEdgeCandidates(int vertex_id);
     void findEdgeCandidates();
@@ -62,7 +66,9 @@ private:
     bool new_edges_added;
     boost::shared_ptr<envire::Environment> env;
     boost::shared_ptr<envire::MLSProjection> projection;
+    boost::shared_ptr<VertexGrid> vertex_grid;
     bool use_mls;
+    bool use_vertex_grid;
 };
     
 } // end namespace

@@ -38,6 +38,7 @@ void ExtendedSparseOptimizer::initValues()
     last_vertex = NULL;
     new_edges_added = false;
     use_mls = false;
+    use_vertex_grid = false;
 }
 
 void ExtendedSparseOptimizer::clear()
@@ -45,6 +46,7 @@ void ExtendedSparseOptimizer::clear()
     initValues();
     env.reset(new envire::Environment);
     projection.reset();
+    vertex_grid.reset();
     vertices_to_add.clear();
     edges_to_add.clear();
 
@@ -212,6 +214,31 @@ bool ExtendedSparseOptimizer::removePointcloudFromVertex(int vertex_id)
     return false;
 }
 
+void ExtendedSparseOptimizer::setupMaxVertexGrid(unsigned max_vertices_per_cell, double grid_size_x, double grid_size_y, double cell_resolution)
+{
+    if(vertex_grid.use_count() == 0)
+    {
+        vertex_grid.reset(new VertexGrid(grid_size_x, grid_size_y, cell_resolution, max_vertices_per_cell));
+        use_vertex_grid = true;
+    }
+    vertex_grid->setMaxVerticesPerCell(max_vertices_per_cell);
+}
+
+void ExtendedSparseOptimizer::removeVerticesFromGrid()
+{
+    if(!use_vertex_grid)
+        return;
+    std::vector<int> vertices;
+    vertex_grid->removeVertices(vertices);
+    for(unsigned i = 0; i < vertices.size(); i++)
+    {
+        if(!removePointcloudFromVertex(vertices[i]))
+            std::cerr << "couldn't remove vertex with id " << vertices[i] << std::endl;
+        else
+            std::cerr << "removed vertex with id " << vertices[i] << std::endl;
+    }
+}
+
 void ExtendedSparseOptimizer::findEdgeCandidates()
 {
     for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
@@ -348,9 +375,10 @@ void ExtendedSparseOptimizer::tryBestEdgeCandidates(unsigned count)
 
 int ExtendedSparseOptimizer::optimize(int iterations, bool online)
 {
-    // update hessian matrix
+    int err = -1;
     if(vertices_to_add.size())
     {
+        // update hessian matrix
         if(initialized)
         {
             if(!updateInitialization(vertices_to_add, edges_to_add))
@@ -362,13 +390,31 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
                 throw std::runtime_error("initialize optimization failed!");
             initialized = true;
         }
+        
+        // do optimization
+        err = g2o::SparseOptimizer::optimize(iterations, online);
+
+        // add new vertecies to grid
+        if(use_vertex_grid)
+        {
+            for(g2o::HyperGraph::VertexSet::const_iterator it = vertices_to_add.begin(); it != vertices_to_add.end(); it++)
+            {
+                graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
+                if(vertex)
+                    vertex_grid->addVertex(vertex->id(), vertex->estimate().translation());
+            }
+        }
+
         vertices_to_add.clear();
         edges_to_add.clear();
     }
-    
-    
-    // do optimization
-    return g2o::SparseOptimizer::optimize(iterations, online);
+    else
+    {
+        // do optimization
+        err = g2o::SparseOptimizer::optimize(iterations, online);
+    }
+
+    return err;
 }
 
 void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y)

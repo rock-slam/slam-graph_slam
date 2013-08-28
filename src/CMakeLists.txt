@@ -12,6 +12,7 @@ rock_library(graph_slam
         pointcloud_helper.cpp
         extended_sparse_optimizer.cpp
         matrix_helper.cpp
+        vertex_grid.cpp
     HEADERS 
         VisualPoseGraph.hpp 
         PoseGraph.hpp 
@@ -24,6 +25,7 @@ rock_library(graph_slam
         pointcloud_helper.hpp
         extended_sparse_optimizer.hpp
         matrix_helper.hpp
+        vertex_grid.hpp
     DEPS_PKGCONFIG 
         envire base-types hogman stereo g2o pcl_registration-1.7
     DEPS_CMAKE
