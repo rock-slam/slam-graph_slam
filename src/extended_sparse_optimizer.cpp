@@ -523,11 +523,14 @@ void ExtendedSparseOptimizer::dumpGraphViz(std::ostream& os)
     os << "digraph G {" << std::endl;
     for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
     {
-        graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
-        if(source_vertex)
+        graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
+        if(vertex)
         {
-            const Eigen::Isometry3d& pose = source_vertex->estimate();
-            os << "  v" << source_vertex->id() << " [pos=\"" << pose.translation().x() << "," << pose.translation().y() << "\"];" << std::endl;
+            const Eigen::Isometry3d& pose = vertex->estimate();
+            os << "  v" << vertex->id() << " [pos=\"" << pose.translation().x() << "," << pose.translation().y() << "\"";
+            if(!vertex->hasPointcloudAttached())
+                os << ", style=dashed";
+            os << "];" << std::endl;
         }
     }
     for(g2o::OptimizableGraph::EdgeContainer::iterator edge = _activeEdges.begin(); edge != _activeEdges.end(); edge++)
