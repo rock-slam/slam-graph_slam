@@ -148,7 +148,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
         edge->setGICPConfiguration(gicp_config);
         
         edge->setMeasurement(odometry_pose_delta);
-        edge->setInformation(odometry_covariance_delta.inverse());
+        edge->setInformation((Matrix6d::Identity() + odometry_covariance_delta).inverse());
 
         if(!edge->setMeasurementFromGICP(delayed_icp_update))
             throw std::runtime_error("compute transformation using gicp failed!");

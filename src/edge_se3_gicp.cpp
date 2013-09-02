@@ -75,7 +75,7 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
         
         _measurement = Eigen::Isometry3d(transformation).inverse() * transfomation_guess;
         _inverseMeasurement = _measurement.inverse();
-        _information = combineToPoseCovariance(pow(gicp_config.position_sigma,2) * Eigen::Matrix3d::Identity(), pow(gicp_config.orientation_sigma,2) * Eigen::Matrix3d::Identity()).inverse();
+        _information = ((fitness_score / gicp_config.max_fitness_score) * Matrix6d::Identity()).inverse();
         
         valid_gicp_measurement = true;
     }
