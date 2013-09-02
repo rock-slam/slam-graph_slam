@@ -241,22 +241,32 @@ void ExtendedSparseOptimizer::removeVerticesFromGrid()
 
 void ExtendedSparseOptimizer::findEdgeCandidates()
 {
+    g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
+    VertexContainer vc;
+    for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
+    {
+        graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
+        if(vertex && vertex->hasPointcloudAttached() && isHandledByOptimizer(vertex))
+            vc.push_back(vertex);
+    }
+    computeMarginals(spinv, vc);
+
     for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
     {
         graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
         if(vertex && vertex->hasPointcloudAttached() && !vertex->getEdgeSearchState().has_run)
         {
-            findEdgeCandidates(vertex->id());
+            findEdgeCandidates(vertex->id(), spinv);
         }
         // TODO add a check for vertecies, if the pose has significantly changed
     }
 }
 
-void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id)
+void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id, const g2o::SparseBlockMatrix<Eigen::MatrixXd>& spinv)
 {
     graph_slam::VertexSE3_GICP *source_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(vertex_id));
     Matrix6d source_covariance;
-    if(source_vertex && source_vertex->hasPointcloudAttached() && getVertexCovariance(source_covariance, source_vertex))
+    if(source_vertex && source_vertex->hasPointcloudAttached() && getVertexCovariance(source_covariance, source_vertex, spinv))
     {
         for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
         {
@@ -274,7 +284,7 @@ void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id)
                 assert(equal_edges <= 1);
                 
                 Matrix6d target_covariance;
-                if(equal_edges == 0 && getVertexCovariance(target_covariance, target_vertex))
+                if(equal_edges == 0 && getVertexCovariance(target_covariance, target_vertex, spinv))
                 {
                     // try to add a new edge
                     Eigen::Matrix3d position_covariance = source_covariance.topLeftCorner<3,3>() + target_covariance.topLeftCorner<3,3>();
@@ -448,6 +458,17 @@ bool ExtendedSparseOptimizer::updateEnvire()
 {
     // update framenodes
     unsigned err_counter = 0;
+    g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
+    VertexContainer vc;
+    for(VertexIDMap::const_iterator it = _vertices.begin(); it != _vertices.end(); it++)
+    {
+        graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(it->second);
+        if(!vertex->hasPointcloudAttached() || !isHandledByOptimizer(vertex))
+            continue;
+        vc.push_back(vertex);
+    }
+    computeMarginals(spinv, vc);
+
     for(VertexIDMap::const_iterator it = _vertices.begin(); it != _vertices.end(); it++)
     {
         graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(it->second);
@@ -461,7 +482,8 @@ bool ExtendedSparseOptimizer::updateEnvire()
                 envire::FrameNode* framenode = map->getFrameNode();
                 if(framenode)
                 {
-                    framenode->setTransform(getEnvireTransformWithUncertainty(vertex));
+
+                    framenode->setTransform(getEnvireTransformWithUncertainty(vertex, &spinv));
                     continue;
                 }
             }
@@ -475,15 +497,13 @@ bool ExtendedSparseOptimizer::updateEnvire()
     return !err_counter;
 }
 
-bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2o::OptimizableGraph::Vertex* vertex)
+bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2o::OptimizableGraph::Vertex* vertex, const g2o::SparseBlockMatrix<Eigen::MatrixXd>& spinv)
 {
     if(vertex && isHandledByOptimizer(vertex))
     {
-        g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
-        computeMarginals(spinv, vertex);
         if(vertex->hessianIndex() >= (int)spinv.blockCols().size())
             return false;
-        Eigen::MatrixXd* vertex_cov = spinv.block(vertex->hessianIndex(), vertex->hessianIndex());
+        const Eigen::MatrixXd* vertex_cov = spinv.block(vertex->hessianIndex(), vertex->hessianIndex());
         if(!vertex_cov)
             return false;
         covariance = Matrix6d(*vertex_cov);
@@ -492,15 +512,34 @@ bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2
     return false;
 }
 
-envire::TransformWithUncertainty ExtendedSparseOptimizer::getEnvireTransformWithUncertainty(const g2o::OptimizableGraph::Vertex* vertex)
+bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2o::OptimizableGraph::Vertex* vertex)
+{
+    if(vertex && isHandledByOptimizer(vertex))
+    {
+        g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
+        computeMarginals(spinv, vertex);    
+        return getVertexCovariance(covariance, vertex, spinv);
+    }
+    return false;
+}
+
+envire::TransformWithUncertainty ExtendedSparseOptimizer::getEnvireTransformWithUncertainty(const g2o::OptimizableGraph::Vertex* vertex, const g2o::SparseBlockMatrix<Eigen::MatrixXd>* spinv)
 {
     envire::TransformWithUncertainty transform = envire::TransformWithUncertainty::Identity();
     const graph_slam::VertexSE3_GICP *vertex_se3 = dynamic_cast<const graph_slam::VertexSE3_GICP*>(vertex);
     if(vertex_se3)
         transform.setTransform(Eigen::Affine3d(vertex_se3->estimate().matrix()));
     Matrix6d covariance;
-    if(getVertexCovariance(covariance, vertex))
-        transform.setCovariance(switchEnvireG2oCov(covariance));
+    if(spinv)
+    {
+        if(getVertexCovariance(covariance, vertex, *spinv))
+            transform.setCovariance(switchEnvireG2oCov(covariance));
+    }
+    else
+    {
+        if(getVertexCovariance(covariance, vertex))
+            transform.setCovariance(switchEnvireG2oCov(covariance));
+    }
     return transform;
 }
 
