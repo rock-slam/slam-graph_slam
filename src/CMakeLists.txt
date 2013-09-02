@@ -27,7 +27,8 @@ rock_library(graph_slam
         matrix_helper.hpp
         vertex_grid.hpp
     DEPS_PKGCONFIG 
-        envire base-types hogman stereo g2o pcl_registration-1.7
+        pcl_registration-1.7 envire base-types hogman stereo g2o
     DEPS_CMAKE
         CSparse Cholmod BLAS LAPACK
     )
+
