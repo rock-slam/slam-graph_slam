@@ -433,7 +433,7 @@ void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_s
     {
         double grid_count_x = grid_size_x / cell_resolution_x;
         double grid_count_y = grid_size_y / cell_resolution_y;
-        envire::MultiLevelSurfaceGrid* mls = new envire::MultiLevelSurfaceGrid(grid_count_y, grid_count_x, cell_resolution_x, cell_resolution_y, -0.5 * grid_size_x, -0.5 * grid_size_y);
+        envire::MultiLevelSurfaceGrid* mls = new envire::MultiLevelSurfaceGrid(grid_count_x, grid_count_y, cell_resolution_x, cell_resolution_y, -0.5 * grid_size_x, -0.5 * grid_size_y);
         projection.reset(new envire::MLSProjection());
         env->attachItem(mls);
         envire::FrameNode *fn = new envire::FrameNode();
@@ -467,7 +467,8 @@ bool ExtendedSparseOptimizer::updateEnvire()
             continue;
         vc.push_back(vertex);
     }
-    computeMarginals(spinv, vc);
+    // TODO for now don't use cov in envire, the g2o vertex covariance is way to big
+    //computeMarginals(spinv, vc);
 
     for(VertexIDMap::const_iterator it = _vertices.begin(); it != _vertices.end(); it++)
     {
