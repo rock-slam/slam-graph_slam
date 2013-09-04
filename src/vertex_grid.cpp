@@ -1,5 +1,6 @@
 #include "vertex_grid.hpp"
 #include <boost/foreach.hpp>
+#include <iostream>
 
 namespace graph_slam 
 {
