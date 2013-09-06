@@ -70,6 +70,7 @@ private:
     boost::shared_ptr<VertexGrid> vertex_grid;
     bool use_mls;
     bool use_vertex_grid;
+    bool map_update_necessary;
 };
     
 } // end namespace

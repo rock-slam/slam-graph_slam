@@ -39,6 +39,7 @@ void ExtendedSparseOptimizer::initValues()
     new_edges_added = false;
     use_mls = false;
     use_vertex_grid = false;
+    map_update_necessary = false;
 }
 
 void ExtendedSparseOptimizer::clear()
@@ -385,8 +386,14 @@ void ExtendedSparseOptimizer::tryBestEdgeCandidates(unsigned count)
 
 int ExtendedSparseOptimizer::optimize(int iterations, bool online)
 {
+    if(activeVertices().size() == 0 && vertices_to_add.size() < 2)
+    {
+        // nothing to optimize
+        return 0;
+    }
+
     int err = -1;
-    if(vertices_to_add.size())
+    if(vertices_to_add.size() || edges_to_add.size())
     {
         // update hessian matrix
         if(initialized)
@@ -423,6 +430,7 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
         // do optimization
         err = g2o::SparseOptimizer::optimize(iterations, online);
     }
+    map_update_necessary = true;
 
     return err;
 }
@@ -456,6 +464,10 @@ void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_s
 
 bool ExtendedSparseOptimizer::updateEnvire()
 {
+    // nothing to do
+    if(!map_update_necessary)
+        return true;
+
     // update framenodes
     unsigned err_counter = 0;
     g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
@@ -483,7 +495,6 @@ bool ExtendedSparseOptimizer::updateEnvire()
                 envire::FrameNode* framenode = map->getFrameNode();
                 if(framenode)
                 {
-
                     framenode->setTransform(getEnvireTransformWithUncertainty(vertex, &spinv));
                     continue;
                 }
