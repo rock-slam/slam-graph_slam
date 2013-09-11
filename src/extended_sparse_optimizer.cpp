@@ -435,7 +435,7 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
     return err;
 }
 
-void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y)
+void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y, double min_z, double max_z)
 {
     if(use_mls && projection.use_count() == 0)
     {
@@ -443,6 +443,7 @@ void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_s
         double grid_count_y = grid_size_y / cell_resolution_y;
         envire::MultiLevelSurfaceGrid* mls = new envire::MultiLevelSurfaceGrid(grid_count_x, grid_count_y, cell_resolution_x, cell_resolution_y, -0.5 * grid_size_x, -0.5 * grid_size_y);
         projection.reset(new envire::MLSProjection());
+        projection->setAreaOfInterest(-0.5 * grid_size_x, 0.5 * grid_size_x, -0.5 * grid_size_y, 0.5 * grid_size_y, min_z, max_z);
         env->attachItem(mls);
         envire::FrameNode *fn = new envire::FrameNode();
         env->getRootNode()->addChild(fn);
