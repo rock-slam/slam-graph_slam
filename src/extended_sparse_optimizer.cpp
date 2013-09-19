@@ -133,6 +133,9 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
         
         // set odometry pose as inital pose
         vertex->setEstimate(odometry_pose);
+
+        // do inital update of the map if the first fixed vertex is available
+        map_update_necessary = true;
     }
     else
     {
@@ -481,7 +484,8 @@ bool ExtendedSparseOptimizer::updateEnvire()
         vc.push_back(vertex);
     }
     // TODO for now don't use cov in envire, the g2o vertex covariance is way to big
-    //computeMarginals(spinv, vc);
+    if(!vc.empty())
+        //computeMarginals(spinv, vc);
 
     for(VertexIDMap::const_iterator it = _vertices.begin(); it != _vertices.end(); it++)
     {
