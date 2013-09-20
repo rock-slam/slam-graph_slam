@@ -46,7 +46,6 @@ void ExtendedSparseOptimizer::clear()
 {
     initValues();
     env.reset(new envire::Environment);
-    projection.reset();
     vertex_grid.reset();
     vertices_to_add.clear();
     edges_to_add.clear();
