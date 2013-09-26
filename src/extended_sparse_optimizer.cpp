@@ -402,16 +402,19 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
         {
             if(!updateInitialization(vertices_to_add, edges_to_add))
                 throw std::runtime_error("update optimization failed!");
+
+            // do optimization
+            err = g2o::SparseOptimizer::optimize(iterations, online);
         }
         else
         {
             if(!initializeOptimization())
                 throw std::runtime_error("initialize optimization failed!");
             initialized = true;
+
+            // do optimization
+            err = g2o::SparseOptimizer::optimize(iterations, false);
         }
-        
-        // do optimization
-        err = g2o::SparseOptimizer::optimize(iterations, online);
 
         // add new vertecies to grid
         if(use_vertex_grid)
