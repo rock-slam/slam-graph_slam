@@ -67,7 +67,7 @@ private:
     graph_slam::VertexSE3_GICP* last_vertex;
     bool new_edges_added;
     boost::shared_ptr<envire::Environment> env;
-    boost::shared_ptr<envire::MLSProjection> projection;
+    envire::MLSProjection::Ptr projection;
     boost::shared_ptr<VertexGrid> vertex_grid;
     bool use_mls;
     bool use_vertex_grid;

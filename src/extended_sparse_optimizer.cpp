@@ -444,7 +444,7 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
 
 void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y, double min_z, double max_z)
 {
-    if(use_mls && projection.use_count() == 0)
+    if(use_mls && projection.get() == 0)
     {
         double grid_count_x = grid_size_x / cell_resolution_x;
         double grid_count_y = grid_size_y / cell_resolution_y;
@@ -458,11 +458,11 @@ void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_s
         env->addOutput(projection.get(), mls);
         this->use_mls = true;
     }
-    else if(use_mls && projection.use_count() > 0)
+    else if(use_mls && projection.get() != 0)
     {
         this->use_mls = true;
     }
-    else if(!use_mls && projection.use_count() > 0)
+    else if(!use_mls && projection.get() != 0)
     {
         envire::MultiLevelSurfaceGrid* mls = env->getOutput<envire::MultiLevelSurfaceGrid*>(projection.get());
         mls->clear();
