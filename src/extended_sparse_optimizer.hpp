@@ -24,7 +24,8 @@ public:
     virtual int optimize(int iterations, bool online = false);
     virtual void clear();
     
-    bool addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, bool delayed_icp_update = false);
+    bool addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, 
+                   const Eigen::Affine3d& sensor_origin = Eigen::Affine3d::Identity(), bool delayed_icp_update = false);
     bool removePointcloudFromVertex(int vertex_id);
     bool removeVertex(int vertex_id);
 

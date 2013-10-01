@@ -82,7 +82,8 @@ void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& g
     }
 }
 
-bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, bool delayed_icp_update)
+bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, 
+                                        const Eigen::Affine3d& sensor_origin, bool delayed_icp_update)
 {
     if(next_vertex_id == std::numeric_limits<int>::max())
     {
@@ -114,6 +115,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     // attach point cloud to vertex
     envire::Pointcloud* envire_pointcloud = new envire::Pointcloud();
     envire_pointcloud->vertices = pointcloud;
+    envire_pointcloud->setSensorOrigin(sensor_origin);
     vertex->attachPointCloud(envire_pointcloud);
     
     // added vertex to the graph
