@@ -513,7 +513,11 @@ bool ExtendedSparseOptimizer::updateEnvire()
     }
 
     if(use_mls)
+    {
+        envire::MultiLevelSurfaceGrid* mls = env->getOutput<envire::MultiLevelSurfaceGrid*>(projection.get());
+        mls->clear();
         projection->updateAll();
+    }
 
     return !err_counter;
 }
