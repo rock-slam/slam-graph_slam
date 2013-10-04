@@ -584,7 +584,9 @@ bool ExtendedSparseOptimizer::adjustOdometryPose(const base::samples::RigidBodyS
 
 void ExtendedSparseOptimizer::dumpGraphViz(std::ostream& os)
 {
-    os << "digraph G {" << std::endl;
+    os << "graph G {" << std::endl;
+    os << "label = \"Vertices: " << _activeVertices.size() << ", Edges: " << _activeEdges.size() << "\";" << std::endl;
+    os << "overlap = scale;" << std::endl;
     for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
     {
         graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
@@ -599,15 +601,23 @@ void ExtendedSparseOptimizer::dumpGraphViz(std::ostream& os)
     }
     for(g2o::OptimizableGraph::EdgeContainer::iterator edge = _activeEdges.begin(); edge != _activeEdges.end(); edge++)
     {
-        os << "  v" << (*edge)->vertices()[0]->id() << " -> " << "v" << (*edge)->vertices()[1]->id() << " ";
+        os << "  v" << (*edge)->vertices()[0]->id() << " -- " << "v" << (*edge)->vertices()[1]->id() << " ";
         os << "[";
-        
+
         graph_slam::EdgeSE3_GICP* edge_icp = dynamic_cast<graph_slam::EdgeSE3_GICP*>(*edge);
-        if(edge_icp && !edge_icp->hasValidGICPMeasurement())
-            os << "color=red";
-        
-        os << "]";
-        os << ";" << std::endl;
+        if(edge_icp)
+        {
+            if(edge_icp->hasValidGICPMeasurement())
+                os << "label=" << 0.01 * std::floor(edge_icp->getICPFitnessScore() * 100) << ", fontsize=10, ";
+
+            // set edge color
+            if(!edge_icp->hasValidGICPMeasurement())
+                os << "color=red";
+            else if((*edge)->vertices()[0]->id()+1 != (*edge)->vertices()[1]->id())
+                os << "color=blue";
+        }
+
+        os << "];" << std::endl;
     }
     os << "}" << std::endl;
 }
