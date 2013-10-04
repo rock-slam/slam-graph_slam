@@ -1,11 +1,12 @@
 #include "edge_se3_gicp.hpp"
 #include <graph_slam/matrix_helper.hpp>
 #include <graph_slam/pointcloud_helper.hpp>
+#include <limits> 
 
 namespace graph_slam
 {
     
-EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false), valid_gicp_measurement(false)
+EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(false), valid_gicp_measurement(false), icp_fitness_score(std::numeric_limits<double>::max())
 {
     setGICPConfiguration(GICPConfiguration());
     
@@ -78,6 +79,7 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
         _information = ((fitness_score / gicp_config.max_fitness_score) * Matrix6d::Identity()).inverse();
         
         valid_gicp_measurement = true;
+        icp_fitness_score = fitness_score;
     }
     
     run_gicp = false;
