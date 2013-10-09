@@ -4,7 +4,6 @@
 #include "vertex_se3_gicp.hpp"
 
 #include <g2o/types/slam3d/edge_se3.h>
-#include <pcl/registration/gicp.h>
 
 namespace graph_slam 
 {
@@ -56,7 +55,6 @@ public:
     double getICPFitnessScore() {return icp_fitness_score;}
     
 protected:
-    pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
     bool run_gicp;
     bool use_guess_from_state;
     GICPConfiguration gicp_config;

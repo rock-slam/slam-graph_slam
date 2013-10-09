@@ -1,6 +1,7 @@
 #include "edge_se3_gicp.hpp"
 #include <graph_slam/matrix_helper.hpp>
 #include <graph_slam/pointcloud_helper.hpp>
+#include <pcl/registration/gicp.h>
 #include <limits> 
 
 namespace graph_slam
@@ -17,13 +18,6 @@ EdgeSE3_GICP::EdgeSE3_GICP() : EdgeSE3(), run_gicp(true), use_guess_from_state(f
 
 void EdgeSE3_GICP::setGICPConfiguration(const GICPConfiguration& gicp_config)
 {
-    icp.setMaxCorrespondenceDistance(gicp_config.max_correspondence_distance);
-    icp.setMaximumIterations(gicp_config.maximum_iterations);
-    icp.setTransformationEpsilon(gicp_config.transformation_epsilon);
-    icp.setEuclideanFitnessEpsilon(gicp_config.euclidean_fitness_epsilon);
-    icp.setCorrespondenceRandomness(gicp_config.correspondence_randomness);
-    icp.setMaximumOptimizerIterations(gicp_config.maximum_optimizer_iterations);
-    icp.setRotationEpsilon(gicp_config.rotation_epsilon);
     this->gicp_config = gicp_config;
 }
 
@@ -53,6 +47,16 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
     // compute current transformation guess
     Eigen::Isometry3d transfomation_guess = source_vertex->estimate().inverse() * target_vertex->estimate();
     
+    // config gicp
+    pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
+    icp.setMaxCorrespondenceDistance(gicp_config.max_correspondence_distance);
+    icp.setMaximumIterations(gicp_config.maximum_iterations);
+    icp.setTransformationEpsilon(gicp_config.transformation_epsilon);
+    icp.setEuclideanFitnessEpsilon(gicp_config.euclidean_fitness_epsilon);
+    icp.setCorrespondenceRandomness(gicp_config.correspondence_randomness);
+    icp.setMaximumOptimizerIterations(gicp_config.maximum_optimizer_iterations);
+    icp.setRotationEpsilon(gicp_config.rotation_epsilon);
+
     // set source cloud
     vectorToPCLPointCloud(envire_source_cloud->vertices, *source_cloud.get(), gicp_config.point_cloud_density);
     icp.setInputCloud(source_cloud);
