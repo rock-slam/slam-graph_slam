@@ -72,6 +72,7 @@ private:
     bool use_mls;
     bool use_vertex_grid;
     bool map_update_necessary;
+    g2o::SparseOptimizer cov_graph;
 };
     
 } // end namespace

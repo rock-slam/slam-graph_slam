@@ -49,6 +49,7 @@ void ExtendedSparseOptimizer::clear()
     vertex_grid.reset();
     vertices_to_add.clear();
     edges_to_add.clear();
+    cov_graph.clear();
 
     SparseOptimizer::clear();
 }
@@ -68,6 +69,12 @@ void ExtendedSparseOptimizer::setupOptimizer()
     g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(blockSolver);
     
     setAlgorithm(solver);
+
+    // setup cov graph
+    SlamLinearSolver* covLinearSolver = new SlamLinearSolver();
+    SlamBlockSolver* covBlockSolver = new SlamBlockSolver(covLinearSolver);
+    g2o::OptimizationAlgorithmGaussNewton* covSolver = new g2o::OptimizationAlgorithmGaussNewton(covBlockSolver);
+    cov_graph.setAlgorithm(covSolver);
 }
 
 void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& gicp_config)
@@ -254,7 +261,7 @@ void ExtendedSparseOptimizer::findEdgeCandidates()
         if(vertex && vertex->hasPointcloudAttached() && isHandledByOptimizer(vertex))
             vc.push_back(vertex);
     }
-    computeMarginals(spinv, vc);
+    cov_graph.computeMarginals(spinv, vc);
 
     for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
     {
@@ -293,8 +300,6 @@ void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id, const g2o::Spars
                 {
                     // try to add a new edge
                     Eigen::Matrix3d position_covariance = source_covariance.topLeftCorner<3,3>() + target_covariance.topLeftCorner<3,3>();
-                    // TODO: get correct covariance, for now use the identity
-                    position_covariance = Eigen::Matrix3d::Identity();
                     
                     double distance = computeMahalanobisDistance<double, 3>(source_vertex->estimate().translation(), 
                                                                             position_covariance, 
@@ -399,6 +404,27 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
     int err = -1;
     if(vertices_to_add.size() || edges_to_add.size())
     {
+        // Update the cov graph, which provides the local covariances
+        // This is a hack, since the covariances provided by this otimizer are in the space of the updates
+        for(g2o::HyperGraph::VertexSet::const_iterator it = vertices_to_add.begin(); it != vertices_to_add.end(); it++)
+        {
+            g2o::VertexSE3* v = new g2o::VertexSE3();
+            v->setId((*it)->id());
+            v->setFixed(dynamic_cast<g2o::VertexSE3*>(*it)->fixed());
+            cov_graph.addVertex(v);
+        }
+        for(g2o::HyperGraph::EdgeSet::const_iterator it = edges_to_add.begin(); it != edges_to_add.end(); it++)
+        {
+            g2o::EdgeSE3* e = new g2o::EdgeSE3();
+            e->vertices()[0] = cov_graph.vertex((*it)->vertices()[0]->id());
+            e->vertices()[1] = cov_graph.vertex((*it)->vertices()[1]->id());
+            e->setMeasurement(Eigen::Isometry3d::Identity());
+            e->setInformation(dynamic_cast<g2o::EdgeSE3*>(*it)->information());
+            cov_graph.addEdge(e);
+        }
+        cov_graph.initializeOptimization();
+        cov_graph.optimize(iterations);
+
         // update hessian matrix
         if(initialized)
         {
@@ -487,9 +513,8 @@ bool ExtendedSparseOptimizer::updateEnvire()
             continue;
         vc.push_back(vertex);
     }
-    // TODO for now don't use cov in envire, the g2o vertex covariance is way to big
     if(!vc.empty())
-        //computeMarginals(spinv, vc);
+        cov_graph.computeMarginals(spinv, vc);
 
     for(VertexIDMap::const_iterator it = _vertices.begin(); it != _vertices.end(); it++)
     {
@@ -542,7 +567,7 @@ bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2
     if(vertex && isHandledByOptimizer(vertex))
     {
         g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
-        computeMarginals(spinv, vertex);    
+        cov_graph.computeMarginals(spinv, vertex);
         return getVertexCovariance(covariance, vertex, spinv);
     }
     return false;
