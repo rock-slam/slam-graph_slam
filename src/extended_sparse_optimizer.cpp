@@ -301,9 +301,11 @@ void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id, const g2o::Spars
                     // try to add a new edge
                     Eigen::Matrix3d position_covariance = source_covariance.topLeftCorner<3,3>() + target_covariance.topLeftCorner<3,3>();
                     
-                    double distance = computeMahalanobisDistance<double, 3>(source_vertex->estimate().translation(), 
+                    double mahalanobis_distance = computeMahalanobisDistance<double, 3>(source_vertex->estimate().translation(), 
                                                                             position_covariance, 
                                                                             target_vertex->estimate().translation());
+                    double euclidean_distance = (target_vertex->estimate().translation() - source_vertex->estimate().translation()).norm();
+                    double distance = mahalanobis_distance > euclidean_distance ? euclidean_distance : mahalanobis_distance;
                     
                     if(distance <= gicp_config.max_sensor_distance)
                     {
