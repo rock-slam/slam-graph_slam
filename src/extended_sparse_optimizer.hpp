@@ -64,6 +64,7 @@ private:
     GICPConfiguration gicp_config;
     Eigen::Isometry3d odometry_pose_last_vertex;
     Matrix6d odometry_covariance_last_vertex;
+    Matrix6d covariance_last_optimized_vertex;
     graph_slam::VertexSE3_GICP* last_vertex;
     bool new_edges_added;
     boost::shared_ptr<envire::Environment> env;

@@ -35,6 +35,7 @@ void ExtendedSparseOptimizer::initValues()
     initialized = false;
     odometry_pose_last_vertex = Eigen::Isometry3d::Identity();
     odometry_covariance_last_vertex = Matrix6d::Identity();
+    covariance_last_optimized_vertex = Matrix6d::Identity();
     last_vertex = NULL;
     new_edges_added = false;
     use_mls = false;
@@ -457,6 +458,10 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
             }
         }
 
+        // store the covariance of the newest vertex
+        if(vertices_to_add.size())
+            getVertexCovariance(covariance_last_optimized_vertex, last_vertex);
+
         vertices_to_add.clear();
         edges_to_add.clear();
     }
@@ -604,7 +609,21 @@ bool ExtendedSparseOptimizer::adjustOdometryPose(const base::samples::RigidBodyS
     adjusted_odometry_pose.initUnknown();
     adjusted_odometry_pose.position = adjusted_pose.translation();
     adjusted_odometry_pose.orientation = Eigen::Quaterniond(adjusted_pose.linear());
-    // TODO handle also covariance
+
+    // handle covariance
+    if(!is_nan(odometry_pose.cov_position) && !is_nan(odometry_pose.cov_orientation))
+    {
+        Matrix6d odometry_covariance_delta = odometry_covariance_last_vertex.inverse() * combineToPoseCovariance(odometry_pose.cov_position, odometry_pose.cov_orientation);
+        // TODO this is not quite perfect, because there is a unhandled gap between the last vertex and the last optimized vertex.
+        Matrix6d adjusted_pose_covariance = covariance_last_optimized_vertex + odometry_covariance_delta;
+        adjusted_odometry_pose.cov_position = adjusted_pose_covariance.topLeftCorner<3,3>();
+        adjusted_odometry_pose.cov_orientation = adjusted_pose_covariance.bottomRightCorner<3,3>();
+    }
+    else
+    {
+        adjusted_odometry_pose.invalidatePositionCovariance();
+        adjusted_odometry_pose.invalidateOrientationCovariance();
+    }
     
     return true;
 }
