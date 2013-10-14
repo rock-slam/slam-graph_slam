@@ -97,7 +97,6 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     {
         // this should not happen under normal circumstances
         throw std::runtime_error("Can't add any new vertex. Max id count has been reached.");
-        return false;
     }
     
     // get odometry pose and covariance
@@ -108,12 +107,10 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     if(is_nan(odometry_pose.matrix()))
     {
         throw std::runtime_error("Odometry pose matrix contains not numerical entries!");
-        return false;
     }
     else if(is_nan(odometry_covariance))
     {
         throw std::runtime_error("Odometry covaraince matrix contains not numerical entries!");
-        return false;
     }
     
     // create new vertex
@@ -129,10 +126,9 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     // added vertex to the graph
     if(!g2o::SparseOptimizer::addVertex(vertex))
     {
-        std::cerr << "failed to add a new vertex." << std::endl;
         delete vertex;
         delete envire_pointcloud;
-        return false;
+        throw std::runtime_error("failed to add a new vertex.");
     }
     
     if(next_vertex_id == 0 || last_vertex == NULL)
@@ -164,16 +160,21 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
         edge->setInformation((Matrix6d::Identity() + odometry_covariance_delta).inverse());
 
         if(!edge->setMeasurementFromGICP(delayed_icp_update))
-            throw std::runtime_error("compute transformation using gicp failed!");
-        
-        if(!g2o::SparseOptimizer::addEdge(edge))
         {
-            std::cerr << "failed to add a new edge." << std::endl;
             g2o::SparseOptimizer::removeVertex(vertex);
             delete edge;
             delete vertex;
             delete envire_pointcloud;
-            return false;
+            throw std::runtime_error("compute transformation using gicp failed!");
+        }
+        
+        if(!g2o::SparseOptimizer::addEdge(edge))
+        {
+            g2o::SparseOptimizer::removeVertex(vertex);
+            delete edge;
+            delete vertex;
+            delete envire_pointcloud;
+            throw std::runtime_error("failed to add a new edge.");
         }
         edges_to_add.insert(edge);
     }
@@ -245,9 +246,9 @@ void ExtendedSparseOptimizer::removeVerticesFromGrid()
     vertex_grid->removeVertices(vertices);
     for(unsigned i = 0; i < vertices.size(); i++)
     {
-        if(!removePointcloudFromVertex(vertices[i]))
+        if(!removePointcloudFromVertex(vertices[i]) && _verbose)
             std::cerr << "couldn't remove vertex with id " << vertices[i] << std::endl;
-        else
+        else if(_verbose)
             std::cerr << "removed vertex with id " << vertices[i] << std::endl;
     }
 }
