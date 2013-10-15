@@ -145,7 +145,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     else
     {
         Eigen::Isometry3d odometry_pose_delta = odometry_pose_last_vertex.inverse() * odometry_pose;
-        Matrix6d odometry_covariance_delta = odometry_covariance_last_vertex.inverse() * odometry_covariance;
+        Matrix6d odometry_covariance_delta = odometry_covariance - odometry_covariance_last_vertex;
         
         // set pose of the source vertex times odometry delta as inital pose
         vertex->setEstimate(last_vertex->estimate() * odometry_pose_delta);
@@ -614,7 +614,7 @@ bool ExtendedSparseOptimizer::adjustOdometryPose(const base::samples::RigidBodyS
     // handle covariance
     if(!is_nan(odometry_pose.cov_position) && !is_nan(odometry_pose.cov_orientation))
     {
-        Matrix6d odometry_covariance_delta = odometry_covariance_last_vertex.inverse() * combineToPoseCovariance(odometry_pose.cov_position, odometry_pose.cov_orientation);
+        Matrix6d odometry_covariance_delta = combineToPoseCovariance(odometry_pose.cov_position, odometry_pose.cov_orientation) - odometry_covariance_last_vertex;
         // TODO this is not quite perfect, because there is a unhandled gap between the last vertex and the last optimized vertex.
         Matrix6d adjusted_pose_covariance = covariance_last_optimized_vertex + odometry_covariance_delta;
         adjusted_odometry_pose.cov_position = adjusted_pose_covariance.topLeftCorner<3,3>();
