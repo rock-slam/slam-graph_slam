@@ -23,6 +23,8 @@ ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer()
     initValues();
     setupOptimizer();
     env.reset(new envire::Environment);
+    map2world_frame = new envire::FrameNode();
+    env->addChild(env->getRootNode(), map2world_frame);
 }
 
 ExtendedSparseOptimizer::~ExtendedSparseOptimizer()
@@ -36,6 +38,8 @@ void ExtendedSparseOptimizer::initValues()
     odometry_pose_last_vertex = Eigen::Isometry3d::Identity();
     odometry_covariance_last_vertex = Matrix6d::Identity();
     covariance_last_optimized_vertex = Matrix6d::Identity();
+    map2world = Eigen::Isometry3d::Identity();
+    odometry2world = Eigen::Isometry3d::Identity();
     last_vertex = NULL;
     new_edges_added = false;
     use_mls = false;
@@ -47,6 +51,8 @@ void ExtendedSparseOptimizer::clear()
 {
     initValues();
     env.reset(new envire::Environment);
+    map2world_frame = new envire::FrameNode();
+    env->addChild(env->getRootNode(), map2world_frame);
     vertex_grid.reset();
     vertices_to_add.clear();
     edges_to_add.clear();
@@ -136,8 +142,8 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
         // set first vertex fixed
         vertex->setFixed(true);
         
-        // set odometry pose as inital pose
-        vertex->setEstimate(odometry_pose);
+        // set body2map as inital pose
+        vertex->setEstimate(map2world.inverse() * (odometry2world * odometry_pose));
 
         // do inital update of the map if the first fixed vertex is available
         map_update_necessary = true;
@@ -182,7 +188,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     // add pointcloud to environment
     envire::FrameNode* framenode = new envire::FrameNode();
     framenode->setTransform(Eigen::Affine3d(vertex->estimate().matrix()));
-    env->addChild(env->getRootNode(), framenode);
+    env->addChild(map2world_frame, framenode);
     env->setFrameNode(envire_pointcloud, framenode);
     if(use_mls)
         env->addInput(projection.get(), envire_pointcloud);
@@ -485,10 +491,7 @@ void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_s
         envire::MultiLevelSurfaceGrid* mls = new envire::MultiLevelSurfaceGrid(grid_count_x, grid_count_y, cell_resolution_x, cell_resolution_y, -0.5 * grid_size_x, -0.5 * grid_size_y);
         projection.reset(new envire::MLSProjection());
         projection->setAreaOfInterest(-0.5 * grid_size_x, 0.5 * grid_size_x, -0.5 * grid_size_y, 0.5 * grid_size_y, min_z, max_z);
-        env->attachItem(mls);
-        envire::FrameNode *fn = new envire::FrameNode();
-        env->getRootNode()->addChild(fn);
-        mls->setFrameNode(fn);
+        env->setFrameNode(mls, map2world_frame);
         env->addOutput(projection.get(), mls);
         this->use_mls = true;
     }
@@ -606,7 +609,7 @@ bool ExtendedSparseOptimizer::adjustOdometryPose(const base::samples::RigidBodyS
     if(!last_vertex)
         return false;
     
-    Eigen::Isometry3d adjusted_pose = last_vertex->estimate() * (odometry_pose_last_vertex.inverse() * Eigen::Isometry3d(odometry_pose.getTransform().matrix()));
+    Eigen::Isometry3d adjusted_pose = map2world * (last_vertex->estimate() * (odometry_pose_last_vertex.inverse() * Eigen::Isometry3d(odometry_pose.getTransform().matrix())));
     adjusted_odometry_pose.initUnknown();
     adjusted_odometry_pose.position = adjusted_pose.translation();
     adjusted_odometry_pose.orientation = Eigen::Quaterniond(adjusted_pose.linear());

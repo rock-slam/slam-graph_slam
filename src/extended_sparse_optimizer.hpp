@@ -45,6 +45,8 @@ public:
     boost::shared_ptr<envire::Environment> getEnvironment() {return env;};
     
     void updateGICPConfiguration(const GICPConfiguration& gicp_config);
+    void setMap2WorldTransformation(const Eigen::Isometry3d& map2world) {this->map2world = map2world; map2world_frame->setTransform(Eigen::Affine3d(map2world.matrix()));}
+    void setOdometry2WorldTransformation(const Eigen::Isometry3d& odometry2world) {this->odometry2world = odometry2world;}
     
     bool adjustOdometryPose(const base::samples::RigidBodyState& odometry_pose, base::samples::RigidBodyState& adjusted_odometry_pose) const;
     
@@ -69,11 +71,14 @@ private:
     bool new_edges_added;
     boost::shared_ptr<envire::Environment> env;
     envire::MLSProjection::Ptr projection;
+    envire::FrameNode* map2world_frame;
     boost::shared_ptr<VertexGrid> vertex_grid;
     bool use_mls;
     bool use_vertex_grid;
     bool map_update_necessary;
     g2o::SparseOptimizer cov_graph;
+    Eigen::Isometry3d map2world;
+    Eigen::Isometry3d odometry2world;
 };
     
 } // end namespace
