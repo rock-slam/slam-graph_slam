@@ -570,6 +570,11 @@ bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2
         covariance = Matrix6d(*vertex_cov);
         return true;
     }
+    else if(vertex && vertex->id() == 0 && vertex->fixed())
+    {
+        covariance = Matrix6d::Zero();
+        return true;
+    }
     return false;
 }
 
