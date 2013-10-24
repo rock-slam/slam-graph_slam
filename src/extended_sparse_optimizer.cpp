@@ -36,6 +36,7 @@ void ExtendedSparseOptimizer::initValues()
     next_vertex_id = 0;
     initialized = false;
     odometry_pose_last_vertex = Eigen::Isometry3d::Identity();
+    odometry_pose_last_vertex.matrix() = std::numeric_limits<double>::quiet_NaN() * odometry_pose_last_vertex.matrix();
     odometry_covariance_last_vertex = Matrix6d::Zero();
     covariance_last_optimized_vertex = Matrix6d::Zero();
     map2world = Eigen::Isometry3d::Identity();
@@ -96,6 +97,55 @@ void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& g
     }
 }
 
+bool ExtendedSparseOptimizer::addInitalVertex(std::vector<Eigen::Vector3d>& pointcloud, 
+                                              const Eigen::Affine3d& sensor_origin)
+{
+    if(next_vertex_id != 0 && last_vertex != NULL || !vertices().empty())
+    {
+        throw std::runtime_error("Can't add the inital Vertex, the graph is not empty");
+    }
+
+    // create new vertex
+    graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
+    vertex->setId(next_vertex_id);
+    
+    // attach point cloud to vertex
+    envire::Pointcloud* envire_pointcloud = new envire::Pointcloud();
+    envire_pointcloud->vertices = pointcloud;
+    envire_pointcloud->setSensorOrigin(sensor_origin);
+    vertex->attachPointCloud(envire_pointcloud);
+    
+    // added vertex to the graph
+    if(!g2o::SparseOptimizer::addVertex(vertex))
+    {
+        delete vertex;
+        delete envire_pointcloud;
+        throw std::runtime_error("failed to add a new vertex.");
+    }
+
+    // set first vertex fixed
+    vertex->setFixed(true);
+    
+    // set robot_start in map as inital pose
+    vertex->setEstimate(map2world.inverse() * robot_start2world);
+
+    // do inital update of the map if the first fixed vertex is available
+    map_update_necessary = true;
+
+    // add pointcloud to environment
+    envire::FrameNode* framenode = new envire::FrameNode();
+    framenode->setTransform(Eigen::Affine3d(vertex->estimate().matrix()));
+    env->addChild(map2world_frame, framenode);
+    env->setFrameNode(envire_pointcloud, framenode);
+    if(use_mls)
+        env->addInput(projection.get(), envire_pointcloud);
+
+    vertices_to_add.insert(vertex);
+    last_vertex = vertex;
+    next_vertex_id++;
+    return true;
+}
+
 bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, 
                                         const Eigen::Affine3d& sensor_origin, bool delayed_icp_update)
 {
@@ -118,6 +168,26 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     {
         throw std::runtime_error("Odometry covaraince matrix contains not numerical entries!");
     }
+
+    // add vertex as inital vertex if necessary
+    if(next_vertex_id == 0 || last_vertex == NULL)
+    {
+        if(addInitalVertex(pointcloud, sensor_origin))
+        {
+            // set valid last odometry pose
+            odometry_pose_last_vertex = odometry_pose;
+            odometry_covariance_last_vertex = odometry_covariance;
+            return true;
+        }
+        else
+            return false;
+    }
+    else if(is_nan(odometry_pose_last_vertex.matrix()))
+    {
+        // set valid last odometry pose
+        odometry_pose_last_vertex = odometry_pose;
+        odometry_covariance_last_vertex = odometry_covariance;
+    }
     
     // create new vertex
     graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
@@ -137,53 +207,39 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
         throw std::runtime_error("failed to add a new vertex.");
     }
     
-    if(next_vertex_id == 0 || last_vertex == NULL)
-    {
-        // set first vertex fixed
-        vertex->setFixed(true);
-        
-        // set body2map as inital pose
-        vertex->setEstimate(map2world.inverse() * (odometry2world * odometry_pose));
+    Eigen::Isometry3d odometry_pose_delta = odometry_pose_last_vertex.inverse() * odometry_pose;
+    Matrix6d odometry_covariance_delta = odometry_covariance - odometry_covariance_last_vertex;
+    
+    // set pose of the source vertex times odometry delta as inital pose
+    vertex->setEstimate(last_vertex->estimate() * odometry_pose_delta);
 
-        // do inital update of the map if the first fixed vertex is available
-        map_update_necessary = true;
-    }
-    else
-    {
-        Eigen::Isometry3d odometry_pose_delta = odometry_pose_last_vertex.inverse() * odometry_pose;
-        Matrix6d odometry_covariance_delta = odometry_covariance - odometry_covariance_last_vertex;
-        
-        // set pose of the source vertex times odometry delta as inital pose
-        vertex->setEstimate(last_vertex->estimate() * odometry_pose_delta);
- 
-        // create an edge between the last and the new vertex
-        graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
-        edge->setSourceVertex(last_vertex);
-        edge->setTargetVertex(vertex);
-        edge->setGICPConfiguration(gicp_config);
-        
-        edge->setMeasurement(odometry_pose_delta);
-        edge->setInformation((Matrix6d::Identity() + odometry_covariance_delta).inverse());
+    // create an edge between the last and the new vertex
+    graph_slam::EdgeSE3_GICP* edge = new graph_slam::EdgeSE3_GICP();
+    edge->setSourceVertex(last_vertex);
+    edge->setTargetVertex(vertex);
+    edge->setGICPConfiguration(gicp_config);
+    
+    edge->setMeasurement(odometry_pose_delta);
+    edge->setInformation((Matrix6d::Identity() + odometry_covariance_delta).inverse());
 
-        if(!edge->setMeasurementFromGICP(delayed_icp_update))
-        {
-            g2o::SparseOptimizer::removeVertex(vertex);
-            delete edge;
-            delete vertex;
-            delete envire_pointcloud;
-            throw std::runtime_error("compute transformation using gicp failed!");
-        }
-        
-        if(!g2o::SparseOptimizer::addEdge(edge))
-        {
-            g2o::SparseOptimizer::removeVertex(vertex);
-            delete edge;
-            delete vertex;
-            delete envire_pointcloud;
-            throw std::runtime_error("failed to add a new edge.");
-        }
-        edges_to_add.insert(edge);
+    if(!edge->setMeasurementFromGICP(delayed_icp_update))
+    {
+        g2o::SparseOptimizer::removeVertex(vertex);
+        delete edge;
+        delete vertex;
+        delete envire_pointcloud;
+        throw std::runtime_error("compute transformation using gicp failed!");
     }
+    
+    if(!g2o::SparseOptimizer::addEdge(edge))
+    {
+        g2o::SparseOptimizer::removeVertex(vertex);
+        delete edge;
+        delete vertex;
+        delete envire_pointcloud;
+        throw std::runtime_error("failed to add a new edge.");
+    }
+    edges_to_add.insert(edge);
     
     // add pointcloud to environment
     envire::FrameNode* framenode = new envire::FrameNode();

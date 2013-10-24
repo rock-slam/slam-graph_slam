@@ -26,6 +26,7 @@ public:
     
     bool addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, 
                    const Eigen::Affine3d& sensor_origin = Eigen::Affine3d::Identity(), bool delayed_icp_update = false);
+    bool addInitalVertex(std::vector<Eigen::Vector3d>& pointcloud, const Eigen::Affine3d& sensor_origin = Eigen::Affine3d::Identity());
     bool removePointcloudFromVertex(int vertex_id);
     bool removeVertex(int vertex_id);
 
