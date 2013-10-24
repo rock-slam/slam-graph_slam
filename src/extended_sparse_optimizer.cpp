@@ -36,8 +36,8 @@ void ExtendedSparseOptimizer::initValues()
     next_vertex_id = 0;
     initialized = false;
     odometry_pose_last_vertex = Eigen::Isometry3d::Identity();
-    odometry_covariance_last_vertex = Matrix6d::Identity();
-    covariance_last_optimized_vertex = Matrix6d::Identity();
+    odometry_covariance_last_vertex = Matrix6d::Zero();
+    covariance_last_optimized_vertex = Matrix6d::Zero();
     map2world = Eigen::Isometry3d::Identity();
     odometry2world = Eigen::Isometry3d::Identity();
     last_vertex = NULL;
