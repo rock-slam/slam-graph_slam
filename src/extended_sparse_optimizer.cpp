@@ -40,7 +40,7 @@ void ExtendedSparseOptimizer::initValues()
     odometry_covariance_last_vertex = Matrix6d::Zero();
     covariance_last_optimized_vertex = Matrix6d::Zero();
     map2world = Eigen::Isometry3d::Identity();
-    odometry2world = Eigen::Isometry3d::Identity();
+    robot_start2world = Eigen::Isometry3d::Identity();
     last_vertex = NULL;
     new_edges_added = false;
     use_mls = false;

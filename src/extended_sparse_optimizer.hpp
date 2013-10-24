@@ -47,7 +47,9 @@ public:
     
     void updateGICPConfiguration(const GICPConfiguration& gicp_config);
     void setMap2WorldTransformation(const Eigen::Isometry3d& map2world) {this->map2world = map2world; map2world_frame->setTransform(Eigen::Affine3d(map2world.matrix()));}
-    void setOdometry2WorldTransformation(const Eigen::Isometry3d& odometry2world) {this->odometry2world = odometry2world;}
+    const Eigen::Isometry3d& getMap2WorldTransformation() const {return map2world;}
+    void setRobotStart2WorldTransformation(const Eigen::Isometry3d& robot_start2world) {this->robot_start2world = robot_start2world;}
+    const Eigen::Isometry3d& getRobotStart2WorldTransformation() const {return robot_start2world;}
     
     bool adjustOdometryPose(const base::samples::RigidBodyState& odometry_pose, base::samples::RigidBodyState& adjusted_odometry_pose) const;
     
@@ -79,7 +81,7 @@ private:
     bool map_update_necessary;
     g2o::SparseOptimizer cov_graph;
     Eigen::Isometry3d map2world;
-    Eigen::Isometry3d odometry2world;
+    Eigen::Isometry3d robot_start2world;
 };
     
 } // end namespace
