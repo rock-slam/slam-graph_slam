@@ -317,6 +317,7 @@ void ExtendedSparseOptimizer::removeVerticesFromGrid()
 
 void ExtendedSparseOptimizer::findEdgeCandidates()
 {
+    // compute marginals
     g2o::SparseBlockMatrix<Eigen::MatrixXd> spinv;
     VertexContainer vc;
     for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
@@ -327,6 +328,7 @@ void ExtendedSparseOptimizer::findEdgeCandidates()
     }
     cov_graph.computeMarginals(spinv, vc);
 
+    // find new candidates
     for(g2o::OptimizableGraph::VertexContainer::const_iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
     {
         graph_slam::VertexSE3_GICP *vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
@@ -334,7 +336,7 @@ void ExtendedSparseOptimizer::findEdgeCandidates()
         {
             findEdgeCandidates(vertex->id(), spinv);
         }
-        // TODO add a check for vertecies, if the pose has significantly changed
+        // TODO add a check for vertices, if the pose has significantly changed
     }
 }
 
@@ -344,19 +346,20 @@ void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id, const g2o::Spars
     Matrix6d source_covariance;
     if(source_vertex && source_vertex->hasPointcloudAttached() && getVertexCovariance(source_covariance, source_vertex, spinv))
     {
+        // search in active vertices
         for(g2o::OptimizableGraph::VertexContainer::iterator it = _activeVertices.begin(); it != _activeVertices.end(); it++)
         {
             graph_slam::VertexSE3_GICP *target_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(*it);
             if(target_vertex && target_vertex->hasPointcloudAttached() && (vertex_id < target_vertex->id()-1 || vertex_id > target_vertex->id()+1))
             {
-                // check if vertecies have already an edge
+                // check if vertices have already an edge
                 unsigned equal_edges = 0;
                 for(g2o::HyperGraph::EdgeSet::const_iterator sv_edge = source_vertex->edges().begin(); sv_edge != source_vertex->edges().end(); sv_edge++)
                 {
                     equal_edges += target_vertex->edges().count(*sv_edge);
                 }
                 
-                // there should never be more than one edge between two vertecies
+                // there should never be more than one edge between two vertices
                 assert(equal_edges <= 1);
                 
                 Matrix6d target_covariance;
@@ -435,18 +438,21 @@ void ExtendedSparseOptimizer::tryBestEdgeCandidates(unsigned count)
             // add the new edge to the graph if the icp allignment was successful
             if(edge->hasValidGICPMeasurement())
             {
-                if(!g2o::SparseOptimizer::addEdge(edge))
+                if(g2o::SparseOptimizer::addEdge(edge))
+                {
+                    edges_to_add.insert(edge);
+                    source_vertex->removeEdgeCandidate(target_id);
+                    target_vertex->removeEdgeCandidate(source_vertex->id());
+
+                    if(_verbose)
+                        std::cerr << "Added new edge between vertex " << source_vertex->id() << " and " << target_vertex->id() 
+                                    << ". Mahalanobis distance was " << candidate.mahalanobis_distance << ", edge error was " << candidate.error << std::endl;
+                }
+                else
                 {
                     std::cerr << "failed to add a new edge." << std::endl;
                     delete edge;
                 }
-                else if(_verbose)
-                    std::cerr << "Added new edge between vertex " << source_vertex->id() << " and " << target_vertex->id() 
-                                << ". Mahalanobis distance was " << candidate.mahalanobis_distance << ", edge error was " << candidate.error << std::endl;
-                
-                edges_to_add.insert(edge);
-                source_vertex->removeEdgeCandidate(target_id);
-                target_vertex->removeEdgeCandidate(source_vertex->id());
             }
             else
             {
@@ -510,7 +516,7 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
             err = g2o::SparseOptimizer::optimize(iterations, false);
         }
 
-        // add new vertecies to grid
+        // add new vertices to grid
         if(use_vertex_grid)
         {
             for(g2o::HyperGraph::VertexSet::const_iterator it = vertices_to_add.begin(); it != vertices_to_add.end(); it++)
