@@ -551,6 +551,7 @@ void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, double grid_s
         double grid_count_x = grid_size_x / cell_resolution_x;
         double grid_count_y = grid_size_y / cell_resolution_y;
         envire::MultiLevelSurfaceGrid* mls = new envire::MultiLevelSurfaceGrid(grid_count_x, grid_count_y, cell_resolution_x, cell_resolution_y, -0.5 * grid_size_x, -0.5 * grid_size_y);
+        mls->setSerializeVersion("1.2");
         projection.reset(new envire::MLSProjection());
         projection->setAreaOfInterest(-0.5 * grid_size_x, 0.5 * grid_size_x, -0.5 * grid_size_y, 0.5 * grid_size_y, min_z, max_z);
         env->setFrameNode(mls, map2world_frame);
