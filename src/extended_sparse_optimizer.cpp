@@ -97,10 +97,180 @@ void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& g
     }
 }
 
+bool ExtendedSparseOptimizer::setAPrioriMap(const boost::shared_ptr<envire::Environment>& apriori_env)
+{
+    // for now, assume that the map2world transformation ist the same and that the first pointcloud is the fixed one
+    std::vector<envire::Pointcloud*> pointclouds = apriori_env->getItems<envire::Pointcloud>();
+    if(!pointclouds.empty())
+    {
+        apriori_vertices.clear();
+
+        // find pointcloud with the smallest id
+        unsigned fixed_pc_index = 0;
+        long fixed_pc_id = pointclouds.front()->getUniqueIdNumericalSuffix();
+        for(unsigned i = 1; i < pointclouds.size(); i++)
+        {
+            long id = pointclouds[i]->getUniqueIdNumericalSuffix();
+            if(id < fixed_pc_id)
+            {
+                fixed_pc_index = i;
+                fixed_pc_id = id;
+            }
+        }
+
+        const envire::TransformWithUncertainty& inital_transform = pointclouds[fixed_pc_index]->getFrameNode()->getTransformWithUncertainty();
+        if(is_nan(inital_transform.getTransform().matrix()))
+            return false;
+
+        // create inital vertex
+        graph_slam::VertexSE3_GICP* first_vertex = new graph_slam::VertexSE3_GICP();
+        first_vertex->setId(next_vertex_id);
+        first_vertex->setFixed(true);
+        first_vertex->setEstimate(Eigen::Isometry3d(inital_transform.getTransform().matrix()));
+        first_vertex->setEdgeSearchState(true, first_vertex->estimate());
+        
+        // attach point cloud to vertex
+        envire::Pointcloud* envire_pointcloud = new envire::Pointcloud();
+        envire_pointcloud->vertices = pointclouds[fixed_pc_index]->vertices;
+        envire_pointcloud->setSensorOrigin(pointclouds[fixed_pc_index]->getSensorOrigin());
+        first_vertex->attachPointCloud(envire_pointcloud);
+
+        // add pointcloud to environment
+        envire::FrameNode* framenode = new envire::FrameNode();
+        framenode->setTransform(inital_transform);
+        env->addChild(map2world_frame, framenode);
+        env->setFrameNode(envire_pointcloud, framenode);
+
+        apriori_vertices.push_back(first_vertex);
+        next_vertex_id++;
+
+        // add the rest of the point clouds
+        for(unsigned i = 0; i < pointclouds.size(); i++)
+        {
+            if(i == fixed_pc_index)
+                continue;
+
+            const envire::TransformWithUncertainty& transform = pointclouds[i]->getFrameNode()->getTransformWithUncertainty();
+            // add only uncertain pointclouds, otherwise they have never been optimized
+            if(transform.hasUncertainty() && !is_nan(transform.getCovariance()) && !is_nan(transform.getTransform().matrix()))
+            {
+                // create vertex
+                graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
+                vertex->setId(next_vertex_id);
+                vertex->setEstimate(Eigen::Isometry3d(transform.getTransform().matrix()));
+                vertex->setEdgeSearchState(true, vertex->estimate());
+                
+                // attach point cloud to vertex
+                envire::Pointcloud* envire_pointcloud = new envire::Pointcloud();
+                envire_pointcloud->vertices = pointclouds[i]->vertices;
+                envire_pointcloud->setSensorOrigin(pointclouds[i]->getSensorOrigin());
+                vertex->attachPointCloud(envire_pointcloud);
+
+                // add pointcloud to environment
+                envire::FrameNode* framenode = new envire::FrameNode();
+                framenode->setTransform(transform);
+                env->addChild(map2world_frame, framenode);
+                env->setFrameNode(envire_pointcloud, framenode);
+
+                // create edge to first vertex
+                g2o::EdgeSE3* edge = new g2o::EdgeSE3();
+                edge->vertices()[0] = first_vertex;
+                edge->vertices()[1] = vertex;
+                edge->setMeasurementFromState();
+                edge->setInformation( switchEnvireG2oCov(transform.getCovariance()).inverse() );
+                vertex->edges().insert(edge);
+
+                apriori_vertices.push_back(vertex);
+                next_vertex_id++;
+            }
+        }
+
+        return true;
+    }
+    else
+    {
+        std::cerr << "Couldn't find any pointclouds in the a-priori map." << std::endl;
+    }
+
+    return false;
+}
+
+bool ExtendedSparseOptimizer::attachAPrioriMap()
+{
+    if(!apriori_vertices.empty())
+    {
+        // get current fixed vertex
+        g2o::OptimizableGraph::Vertex* current_fixed_vertex = NULL;
+        for(VertexIDMap::const_iterator it = _vertices.begin(); it != _vertices.end(); it++)
+        {
+            g2o::OptimizableGraph::Vertex* v = dynamic_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+            if(v && v->fixed())
+                current_fixed_vertex = v;
+        }
+
+        // add new fixed vertex
+        graph_slam::VertexSE3_GICP* first_vertex = apriori_vertices.front();
+        if(!g2o::SparseOptimizer::addVertex(first_vertex))
+            return false;
+        if(current_fixed_vertex)
+        {
+            current_fixed_vertex->setFixed(false);
+            g2o::OptimizableGraph::Vertex* fixed_vertex_in_cov_graph = cov_graph.vertex(current_fixed_vertex->id());
+            if(fixed_vertex_in_cov_graph)
+                fixed_vertex_in_cov_graph->setFixed(false);
+        }
+        else
+            std::cerr << "attachAPrioriMap: couldn't find a current fixed vertex." << std::endl;
+        vertices_to_add.insert(first_vertex);
+
+        // reinitalize the complete graph, because fixed vertex has changed
+        initialized = false;
+
+        // add all vertecies and edges to the graph
+        for(unsigned i = 1; i < apriori_vertices.size(); i++)
+        {
+            graph_slam::VertexSE3_GICP* vertex = apriori_vertices[i];
+            g2o::EdgeSE3* edge = dynamic_cast<g2o::EdgeSE3*>(*vertex->edges().begin());
+            vertex->edges().clear();
+
+            if(!g2o::SparseOptimizer::addVertex(vertex))
+                continue;
+
+            if(!edge || !g2o::SparseOptimizer::addEdge(edge))
+            {
+                g2o::SparseOptimizer::removeVertex(vertex);
+                continue;
+            }
+
+            vertices_to_add.insert(vertex);
+            edges_to_add.insert(edge);
+        }
+
+        // project pointclouds into mls 
+        if(use_mls)
+        {
+            for(unsigned i = 0; i < apriori_vertices.size(); i++)
+            {
+                graph_slam::VertexSE3_GICP* vertex = apriori_vertices[i];
+                envire::EnvironmentItem::Ptr envire_item = vertex->getEnvirePointCloud();
+                envire::Pointcloud* envire_pointcloud = dynamic_cast<envire::Pointcloud*>(envire_item.get());
+                if(envire_pointcloud)
+                    env->addInput(projection.get(), envire_pointcloud);
+            }
+        }
+
+        if(_verbose)
+            std::cerr << "Added a-priori map and switched fixed vertex from " << (current_fixed_vertex ? boost::lexical_cast<std::string>(current_fixed_vertex->id()) : "(na)") << " to " << first_vertex->id() << std::endl;
+
+        apriori_vertices.clear();
+    }
+    return true;
+}
+
 bool ExtendedSparseOptimizer::addInitalVertex(std::vector<Eigen::Vector3d>& pointcloud, 
                                               const Eigen::Affine3d& sensor_origin)
 {
-    if(next_vertex_id != 0 && last_vertex != NULL || !vertices().empty())
+    if(last_vertex != NULL || !vertices().empty())
     {
         throw std::runtime_error("Can't add the inital Vertex, the graph is not empty");
     }
@@ -170,7 +340,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     }
 
     // add vertex as inital vertex if necessary
-    if(next_vertex_id == 0 || last_vertex == NULL)
+    if(last_vertex == NULL)
     {
         if(addInitalVertex(pointcloud, sensor_origin))
         {
@@ -383,6 +553,45 @@ void ExtendedSparseOptimizer::findEdgeCandidates(int vertex_id, const g2o::Spars
                 }
             }
         }
+        
+        // search in a-priori vertices
+        for(std::vector<graph_slam::VertexSE3_GICP*>::iterator it = apriori_vertices.begin(); it != apriori_vertices.end(); it++)
+        {
+            graph_slam::VertexSE3_GICP *target_vertex = *it;
+            if(target_vertex && target_vertex->hasPointcloudAttached() && (vertex_id < target_vertex->id()-1 || vertex_id > target_vertex->id()+1))
+            {
+                // check if vertices have already an edge
+                unsigned equal_edges = 0;
+                for(g2o::HyperGraph::EdgeSet::const_iterator sv_edge = source_vertex->edges().begin(); sv_edge != source_vertex->edges().end(); sv_edge++)
+                {
+                    equal_edges += target_vertex->edges().count(*sv_edge);
+                }
+                
+                // there should never be more than one edge between two vertices
+                assert(equal_edges <= 1);
+                
+                Matrix6d target_covariance = Matrix6d::Identity();
+                if(equal_edges == 0)
+                {
+                    // try to add a new edge
+                    Eigen::Matrix3d position_covariance = source_covariance.topLeftCorner<3,3>() + target_covariance.topLeftCorner<3,3>();
+                    
+                    double mahalanobis_distance = computeMahalanobisDistance<double, 3>(source_vertex->estimate().translation(), 
+                                                                            position_covariance, 
+                                                                            target_vertex->estimate().translation());
+                    double euclidean_distance = (target_vertex->estimate().translation() - source_vertex->estimate().translation()).norm();
+                    double distance = mahalanobis_distance > euclidean_distance ? euclidean_distance : mahalanobis_distance;
+                    
+                    if(distance <= gicp_config.max_sensor_distance)
+                    {
+                        source_vertex->addEdgeCandidate(target_vertex->id(), distance);
+                        target_vertex->addEdgeCandidate(source_vertex->id(), distance);
+                        new_edges_added = true;
+                    }
+                }
+            }
+        }
+
         // save search pose
         source_vertex->setEdgeSearchState(true, source_vertex->estimate());
     }
@@ -421,6 +630,21 @@ void ExtendedSparseOptimizer::tryBestEdgeCandidates(unsigned count)
         {
             graph_slam::VertexSE3_GICP *target_vertex = dynamic_cast<graph_slam::VertexSE3_GICP*>(this->vertex(target_id));
 
+            // check if vertex is a a-priori vertex
+            bool apriori_target_vertex = false;
+            if(!target_vertex && !apriori_vertices.empty())
+            {
+                for(std::vector<graph_slam::VertexSE3_GICP*>::iterator it = apriori_vertices.begin(); it != apriori_vertices.end(); it++)
+                {
+                    if(target_id == (*it)->id())
+                    {
+                        target_vertex = *it;
+                        apriori_target_vertex = true;
+                        break;
+                    }
+                }
+            }
+
             if(!target_vertex || !target_vertex->hasPointcloudAttached())
             {
                 source_vertex->removeEdgeCandidate(target_id);
@@ -443,6 +667,9 @@ void ExtendedSparseOptimizer::tryBestEdgeCandidates(unsigned count)
                     edges_to_add.insert(edge);
                     source_vertex->removeEdgeCandidate(target_id);
                     target_vertex->removeEdgeCandidate(source_vertex->id());
+
+                    if(apriori_target_vertex)
+                        attachAPrioriMap();
 
                     if(_verbose)
                         std::cerr << "Added new edge between vertex " << source_vertex->id() << " and " << target_vertex->id() 
@@ -633,7 +860,7 @@ bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2
         covariance = Matrix6d(*vertex_cov);
         return true;
     }
-    else if(vertex && vertex->id() == 0 && vertex->fixed())
+    else if(vertex && vertex->fixed())
     {
         covariance = Matrix6d::Zero();
         return true;
@@ -733,6 +960,14 @@ void ExtendedSparseOptimizer::dumpGraphViz(std::ostream& os)
                 os << "color=red";
             else if((*edge)->vertices()[0]->id()+1 != (*edge)->vertices()[1]->id())
                 os << "color=blue";
+        }
+        else
+        {
+            g2o::EdgeSE3* edge_se3 = dynamic_cast<g2o::EdgeSE3*>(*edge);
+            if(edge_se3)
+            {
+                os << "color=green";
+            }
         }
 
         os << "];" << std::endl;

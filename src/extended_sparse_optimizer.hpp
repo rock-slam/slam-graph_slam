@@ -23,6 +23,8 @@ public:
 
     virtual int optimize(int iterations, bool online = false);
     virtual void clear();
+
+    bool setAPrioriMap(const boost::shared_ptr<envire::Environment>& apriori_env);
     
     bool addVertex(const envire::TransformWithUncertainty& transformation, std::vector<Eigen::Vector3d>& pointcloud, 
                    const Eigen::Affine3d& sensor_origin = Eigen::Affine3d::Identity(), bool delayed_icp_update = false);
@@ -56,6 +58,7 @@ public:
     void dumpGraphViz(std::ostream& os);
     
 protected:
+    bool attachAPrioriMap();
     
 private:
     void setupOptimizer();
@@ -82,6 +85,7 @@ private:
     g2o::SparseOptimizer cov_graph;
     Eigen::Isometry3d map2world;
     Eigen::Isometry3d robot_start2world;
+    std::vector<graph_slam::VertexSE3_GICP*> apriori_vertices;
 };
     
 } // end namespace
