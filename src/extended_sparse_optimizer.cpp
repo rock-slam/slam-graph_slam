@@ -29,6 +29,7 @@ ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer()
 
 ExtendedSparseOptimizer::~ExtendedSparseOptimizer()
 {
+    clear();
 }
 
 void ExtendedSparseOptimizer::initValues()
@@ -50,16 +51,26 @@ void ExtendedSparseOptimizer::initValues()
 
 void ExtendedSparseOptimizer::clear()
 {
-    initValues();
     env.reset(new envire::Environment);
+    projection.reset();
     map2world_frame = new envire::FrameNode();
     env->addChild(env->getRootNode(), map2world_frame);
     vertex_grid.reset();
+
+    for (std::vector<graph_slam::VertexSE3_GICP*>::iterator it=apriori_vertices.begin(); it!=apriori_vertices.end(); ++it)
+    {
+        for (g2o::HyperGraph::EdgeSet::iterator edge=(*it)->edges().begin(); edge!=(*it)->edges().end(); ++edge)
+            delete (*edge);
+        delete (*it);
+    }
+    apriori_vertices.clear();
+    cov_graph.clear();
     vertices_to_add.clear();
     edges_to_add.clear();
-    cov_graph.clear();
-
     SparseOptimizer::clear();
+    SparseOptimizer::clearParameters();
+
+    initValues();
 }
 
 void ExtendedSparseOptimizer::setupOptimizer()
@@ -302,6 +313,10 @@ bool ExtendedSparseOptimizer::addInitalVertex(std::vector<Eigen::Vector3d>& poin
     // do inital update of the map if the first fixed vertex is available
     map_update_necessary = true;
 
+    vertices_to_add.insert(vertex);
+    last_vertex = vertex;
+    next_vertex_id++;
+
     // add pointcloud to environment
     envire::FrameNode* framenode = new envire::FrameNode();
     framenode->setTransform(Eigen::Affine3d(vertex->estimate().matrix()));
@@ -310,9 +325,6 @@ bool ExtendedSparseOptimizer::addInitalVertex(std::vector<Eigen::Vector3d>& poin
     if(use_mls)
         env->addInput(projection.get(), envire_pointcloud);
 
-    vertices_to_add.insert(vertex);
-    last_vertex = vertex;
-    next_vertex_id++;
     return true;
 }
 
@@ -410,6 +422,13 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
         throw std::runtime_error("failed to add a new edge.");
     }
     edges_to_add.insert(edge);
+
+    vertices_to_add.insert(vertex);
+    odometry_pose_last_vertex = odometry_pose;
+    odometry_covariance_last_vertex = odometry_covariance;
+    last_vertex = vertex;
+    
+    next_vertex_id++;
     
     // add pointcloud to environment
     envire::FrameNode* framenode = new envire::FrameNode();
@@ -419,12 +438,6 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     if(use_mls)
         env->addInput(projection.get(), envire_pointcloud);
 
-    vertices_to_add.insert(vertex);
-    odometry_pose_last_vertex = odometry_pose;
-    odometry_covariance_last_vertex = odometry_covariance;
-    last_vertex = vertex;
-    
-    next_vertex_id++;
     return true;
 }
 
