@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <graph_slam/vertex_se3_gicp.hpp>
+#include <base/Pose.hpp>
 
 #include <g2o/core/factory.h>
 #include <g2o/core/optimization_algorithm_factory.h>
@@ -278,13 +279,15 @@ bool ExtendedSparseOptimizer::attachAPrioriMap()
     return true;
 }
 
-bool ExtendedSparseOptimizer::addInitalVertex(std::vector<Eigen::Vector3d>& pointcloud, 
+bool ExtendedSparseOptimizer::addInitalVertex(const envire::TransformWithUncertainty& transformation,
+                                              std::vector<Eigen::Vector3d>& pointcloud, 
                                               const Eigen::Affine3d& sensor_origin)
 {
     if(last_vertex != NULL || !vertices().empty())
     {
         throw std::runtime_error("Can't add the inital Vertex, the graph is not empty");
     }
+    Eigen::Isometry3d odometry_pose(transformation.getTransform().matrix());
 
     // create new vertex
     graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
@@ -308,7 +311,7 @@ bool ExtendedSparseOptimizer::addInitalVertex(std::vector<Eigen::Vector3d>& poin
     vertex->setFixed(true);
     
     // set robot_start in map as inital pose
-    vertex->setEstimate(map2world.inverse() * robot_start2world);
+    vertex->setEstimate( map2world.inverse() * (robot_start2world * base::removeYaw( Eigen::Quaterniond(odometry_pose.linear()) )) );
 
     // do inital update of the map if the first fixed vertex is available
     map_update_necessary = true;
@@ -354,7 +357,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     // add vertex as inital vertex if necessary
     if(last_vertex == NULL)
     {
-        if(addInitalVertex(pointcloud, sensor_origin))
+        if(addInitalVertex(transformation, pointcloud, sensor_origin))
         {
             // set valid last odometry pose
             odometry_pose_last_vertex = odometry_pose;
