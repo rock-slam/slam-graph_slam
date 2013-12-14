@@ -289,6 +289,12 @@ bool ExtendedSparseOptimizer::addInitalVertex(const envire::TransformWithUncerta
     }
     Eigen::Isometry3d odometry_pose(transformation.getTransform().matrix());
 
+    // check for nan values
+    if(is_nan(odometry_pose.matrix()))
+    {
+        throw std::runtime_error("Odometry pose matrix contains not numerical entries!");
+    }
+
     // create new vertex
     graph_slam::VertexSE3_GICP* vertex = new graph_slam::VertexSE3_GICP();
     vertex->setId(next_vertex_id);

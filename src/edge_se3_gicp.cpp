@@ -77,6 +77,13 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
     if(icp.hasConverged() && fitness_score <= gicp_config.max_fitness_score)
     {
         Eigen::Isometry3f transformation(icp.getFinalTransformation());
+
+        // check for nan values
+        if(is_nan(transformation.matrix()))
+        {
+            std::cerr << "Messurement from ICP contains not numerical values." << std::endl;
+            return false;
+        }
         
         _measurement = Eigen::Isometry3d(transformation).inverse() * transfomation_guess;
         _inverseMeasurement = _measurement.inverse();
