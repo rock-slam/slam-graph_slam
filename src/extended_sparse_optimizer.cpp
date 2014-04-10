@@ -357,7 +357,7 @@ bool ExtendedSparseOptimizer::addVertex(const envire::TransformWithUncertainty& 
     }
     else if(is_nan(odometry_covariance))
     {
-        throw std::runtime_error("Odometry covaraince matrix contains not numerical entries!");
+        throw std::runtime_error("Odometry covariance matrix contains not numerical entries!");
     }
 
     // add vertex as inital vertex if necessary
@@ -456,7 +456,7 @@ bool ExtendedSparseOptimizer::removeVertex(int vertex_id)
     if(vertex && isHandledByOptimizer(vertex))
     {
         removePointcloudFromVertex(vertex_id);
-        //TODO
+        //TODO the vertex should be removed later too
         
     }
     return false;
@@ -882,6 +882,21 @@ bool ExtendedSparseOptimizer::getVertexCovariance(Matrix6d& covariance, const g2
         if(!vertex_cov)
             return false;
         covariance = Matrix6d(*vertex_cov);
+	
+	/* NOTE this should be normally done to remove the pose in the covariance,
+	 * instead of using the seperated cov_graph. but it doesn't work, ending up with broken covariances.
+	Eigen::Matrix<double, 6, 1> minimal_pose;
+	vertex->getMinimalEstimateData(minimal_pose.data());
+	for(int i = 0; i < 3; i++)
+	    for(int j = 0; j <= i; j++)
+	    {
+		double sq_pose = minimal_pose(i,0)*minimal_pose(j,0);
+		covariance(i,j) -= sq_pose;
+		if(i != j)
+		    covariance(i,j) -= sq_pose;
+	    }
+	*/
+	
         return true;
     }
     else if(vertex && vertex->fixed())
