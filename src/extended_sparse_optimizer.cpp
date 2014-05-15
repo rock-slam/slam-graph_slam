@@ -747,7 +747,7 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
         cov_graph.optimize(iterations);
 
         // update hessian matrix
-        if(initialized)
+        if(initialized && online)
         {
             if(!updateInitialization(vertices_to_add, edges_to_add))
                 throw std::runtime_error("update optimization failed!");
