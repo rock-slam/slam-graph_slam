@@ -6,6 +6,7 @@
 #include <graph_slam/edge_se3_gicp.hpp>
 #include <graph_slam/matrix_helper.hpp>
 #include <graph_slam/vertex_grid.hpp>
+#include <graph_slam/graph_slam_config.hpp>
 #include <envire/core/Transform.hpp>
 #include <boost/shared_ptr.hpp>
 #include <envire/core/Environment.hpp>

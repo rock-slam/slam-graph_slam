@@ -26,6 +26,7 @@ rock_library(graph_slam
         extended_sparse_optimizer.hpp
         matrix_helper.hpp
         vertex_grid.hpp
+        graph_slam_config.hpp
     DEPS_PKGCONFIG 
         pcl_registration-1.7 envire base-types hogman stereo g2o
     DEPS_CMAKE
