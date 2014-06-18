@@ -8,10 +8,9 @@
 #include <g2o/core/optimization_algorithm_factory.h>
 #include <g2o/core/block_solver.h>
 #include <g2o/core/optimization_algorithm_gauss_newton.h>
-#include <g2o/solvers/pcg/linear_solver_pcg.h>
+#include <g2o/core/optimization_algorithm_levenberg.h>
 #include <g2o/solvers/cholmod/linear_solver_cholmod.h>
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
-#include <g2o/solvers/dense/linear_solver_dense.h>
 
 #include <envire/maps/Pointcloud.hpp>
 #include <envire/maps/MLSGrid.hpp>
@@ -19,10 +18,10 @@
 namespace graph_slam 
 {
     
-ExtendedSparseOptimizer::ExtendedSparseOptimizer() : SparseOptimizer()
+ExtendedSparseOptimizer::ExtendedSparseOptimizer(OptimizationAlgorithm optimizer, LinearSolver solver) : SparseOptimizer()
 {
     initValues();
-    setupOptimizer();
+    setupOptimizer(optimizer, solver);
     env.reset(new envire::Environment);
     map2world_frame = new envire::FrameNode();
     env->addChild(env->getRootNode(), map2world_frame);
@@ -74,27 +73,50 @@ void ExtendedSparseOptimizer::clear()
     initValues();
 }
 
-void ExtendedSparseOptimizer::setupOptimizer()
+void ExtendedSparseOptimizer::setupOptimizer(OptimizationAlgorithm optimizer, LinearSolver solver)
 {
     typedef g2o::BlockSolver< g2o::BlockSolverTraits<-1, -1> >  SlamBlockSolver;
-    //typedef g2o::LinearSolverPCG<SlamBlockSolver::PoseMatrixType> SlamLinearSolver;
-    typedef g2o::LinearSolverCSparse<SlamBlockSolver::PoseMatrixType> SlamLinearSolver;
-    //typedef g2o::LinearSolverCholmod<SlamBlockSolver::PoseMatrixType> SlamLinearSolver;
-    //typedef g2o::LinearSolverDense<SlamBlockSolver::PoseMatrixType> SlamLinearSolver;
+    typedef g2o::LinearSolverCCS<SlamBlockSolver::PoseMatrixType> LinearSolver;
+    typedef g2o::LinearSolverCSparse<SlamBlockSolver::PoseMatrixType> CSparseLinearSolver;
+    typedef g2o::LinearSolverCholmod<SlamBlockSolver::PoseMatrixType> CholmodLinearSolver;
+    
+    // allocating the linear solver
+    LinearSolver* linearSolver = NULL;
+    LinearSolver* covLinearSolver = NULL;
+    if(solver == CSparse)
+    {
+	linearSolver = new CSparseLinearSolver();
+	covLinearSolver = new CSparseLinearSolver();
+    }
+    else if(solver == Cholmod)
+    {
+	linearSolver = new CholmodLinearSolver();
+	covLinearSolver = new CholmodLinearSolver();
+    }
+    else
+	throw std::runtime_error("Unknown linear solver selected!");
+    
+    SlamBlockSolver* blockSolver = new SlamBlockSolver(linearSolver);
+    SlamBlockSolver* covBlockSolver = new SlamBlockSolver(covLinearSolver);
     
     // allocating the optimizer
-    SlamLinearSolver* linearSolver = new SlamLinearSolver();
-    SlamBlockSolver* blockSolver = new SlamBlockSolver(linearSolver);
-    //g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(blockSolver);
-    g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton(blockSolver);
+    g2o::OptimizationAlgorithmWithHessian* optimizationAlgorithm = NULL;
+    g2o::OptimizationAlgorithmWithHessian* covOptimizationAlgorithm = NULL;
+    if(optimizer == GaussNewton)
+    {
+	optimizationAlgorithm = new g2o::OptimizationAlgorithmGaussNewton(blockSolver);
+	covOptimizationAlgorithm = new g2o::OptimizationAlgorithmGaussNewton(covBlockSolver);
+    }
+    else if(optimizer == LevenbergMarquardt)
+    {
+	optimizationAlgorithm = new g2o::OptimizationAlgorithmLevenberg(blockSolver);
+	covOptimizationAlgorithm = new g2o::OptimizationAlgorithmLevenberg(covBlockSolver);
+    }
+    else
+	throw std::runtime_error("Unknown optimization algorithm selected!");
     
-    setAlgorithm(solver);
-
-    // setup cov graph
-    SlamLinearSolver* covLinearSolver = new SlamLinearSolver();
-    SlamBlockSolver* covBlockSolver = new SlamBlockSolver(covLinearSolver);
-    g2o::OptimizationAlgorithmGaussNewton* covSolver = new g2o::OptimizationAlgorithmGaussNewton(covBlockSolver);
-    cov_graph.setAlgorithm(covSolver);
+    setAlgorithm(optimizationAlgorithm);
+    cov_graph.setAlgorithm(covOptimizationAlgorithm);
 }
 
 void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& gicp_config)

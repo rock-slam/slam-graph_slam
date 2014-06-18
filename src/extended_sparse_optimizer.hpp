@@ -19,7 +19,25 @@ class ExtendedSparseOptimizer : public g2o::SparseOptimizer
 {
 public:
     
-    ExtendedSparseOptimizer();
+    /**
+     * Available linear solvers
+     */
+    enum LinearSolver
+    {
+	CSparse = 0,
+	Cholmod
+    };
+
+    /**
+     * Available optimization algorithms
+     */
+    enum OptimizationAlgorithm
+    {
+	GaussNewton = 0,
+	LevenbergMarquardt
+    };
+    
+    ExtendedSparseOptimizer(OptimizationAlgorithm optimizer = GaussNewton, LinearSolver solver = CSparse);
     virtual ~ExtendedSparseOptimizer();
 
     virtual int optimize(int iterations, bool online = false);
@@ -62,7 +80,7 @@ protected:
     bool attachAPrioriMap();
     
 private:
-    void setupOptimizer();
+    void setupOptimizer(OptimizationAlgorithm optimizer, LinearSolver solver);
     void initValues();
     bool isHandledByOptimizer(const g2o::OptimizableGraph::Vertex* vertex) const {return vertex->hessianIndex() >= 0;};
     
