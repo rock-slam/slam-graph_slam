@@ -62,7 +62,8 @@ public:
     bool getVertexCovariance(Matrix6d& covariance, const g2o::OptimizableGraph::Vertex* vertex, const g2o::SparseBlockMatrix<Eigen::MatrixXd>& spinv);
     envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::OptimizableGraph::Vertex* vertex, const g2o::SparseBlockMatrix<Eigen::MatrixXd>* spinv = 0);
 
-    void setMLSMapConfiguration(bool use_mls, const std::string& mls_id, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y, double min_z, double max_z);
+    void setMLSMapConfiguration(bool use_mls, const envire::MLSConfiguration& mls_config, const std::string& mls_id, 
+				double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y, double min_z, double max_z);
     bool updateEnvire();
     boost::shared_ptr<envire::Environment> getEnvironment() {return env;};
     

@@ -815,20 +815,26 @@ int ExtendedSparseOptimizer::optimize(int iterations, bool online)
     return err;
 }
 
-void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, const std::string& mls_id, double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y, double min_z, double max_z)
+void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, const envire::MLSConfiguration& mls_config, const std::string& mls_id, 
+						     double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y, double min_z, double max_z)
 {
     if(use_mls && projection.get() == 0)
     {
+	// Setup mls map
         double grid_count_x = grid_size_x / cell_resolution_x;
         double grid_count_y = grid_size_y / cell_resolution_y;
         envire::MultiLevelSurfaceGrid* mls = new envire::MultiLevelSurfaceGrid(grid_count_x, grid_count_y, cell_resolution_x, cell_resolution_y, -0.5 * grid_size_x, -0.5 * grid_size_y);
+	mls->setUniqueId(mls_id);
+	mls->getConfig() = mls_config;
 	// Using mls-patch version 1.2 reduces the mls map size, this currently only available in a test branch on envire
         //mls->setSerializeVersion("1.2");
-        mls->setUniqueId(mls_id);
+	
+	// Setup mls projection
         projection.reset(new envire::MLSProjection());
         projection->setAreaOfInterest(-0.5 * grid_size_x, 0.5 * grid_size_x, -0.5 * grid_size_y, 0.5 * grid_size_y, min_z, max_z);
         env->setFrameNode(mls, map2world_frame);
         env->addOutput(projection.get(), mls);
+	
         this->use_mls = true;
     }
     else if(use_mls && projection.get() != 0)
