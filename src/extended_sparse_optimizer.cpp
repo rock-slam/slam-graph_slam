@@ -824,7 +824,12 @@ void ExtendedSparseOptimizer::setMLSMapConfiguration(bool use_mls, const envire:
         double grid_count_x = grid_size_x / cell_resolution_x;
         double grid_count_y = grid_size_y / cell_resolution_y;
         envire::MultiLevelSurfaceGrid* mls = new envire::MultiLevelSurfaceGrid(grid_count_x, grid_count_y, cell_resolution_x, cell_resolution_y, -0.5 * grid_size_x, -0.5 * grid_size_y);
-	mls->setUniqueId(mls_id);
+	
+	// set mls id
+	if(mls_id.empty())
+	    mls->setUniqueId("/mls-grid");
+	else
+	    mls->setUniqueId(mls_id);
 	mls->getConfig() = mls_config;
 	// Using mls-patch version 1.2 reduces the mls map size, this currently only available in a test branch on envire
         //mls->setSerializeVersion("1.2");
