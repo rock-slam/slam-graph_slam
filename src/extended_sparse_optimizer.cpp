@@ -47,6 +47,7 @@ void ExtendedSparseOptimizer::initValues()
     use_mls = false;
     use_vertex_grid = false;
     map_update_necessary = false;
+    footprint_radius = 0.0;
 }
 
 void ExtendedSparseOptimizer::clear()
@@ -355,6 +356,24 @@ bool ExtendedSparseOptimizer::addInitalVertex(const envire::TransformWithUncerta
     env->setFrameNode(envire_pointcloud, framenode);
     if(use_mls)
         env->addInput(projection.get(), envire_pointcloud);
+    
+    // add initial foot print to mls map
+    if(use_mls && footprint_radius > 0.0)
+    {
+	double footprint = footprint_radius * 2.0;
+	envire::MultiLevelSurfaceGrid* mls = env->getOutput<envire::MultiLevelSurfaceGrid*>(projection.get());
+	// create footprint vertecies
+	envire::Pointcloud* footprint_pointcloud = new envire::Pointcloud();
+	for(int i = 0; i < footprint / mls->getScaleX(); i++)
+	    for(int j = 0; j < footprint / mls->getScaleY(); j++)
+	    {
+		Eigen::Vector3d point = Eigen::Vector3d(mls->getScaleX() * 0.5 - footprint * 0.5 + (double)i * mls->getScaleX(), mls->getScaleY() * 0.5 - footprint * 0.5 + (double)j * mls->getScaleY(), 0.0);
+		if(point.norm() <= footprint_radius)
+		    footprint_pointcloud->vertices.push_back(point);
+	    }
+	env->setFrameNode(footprint_pointcloud, framenode);
+	env->addInput(projection.get(), footprint_pointcloud);
+    }
 
     return true;
 }
