@@ -4,6 +4,8 @@
 	e.g. HogMan. Its meant to provide a common interface for different
 	optimization libraries.
     </description>
+    <maintainer>Sascha Arnold/sascha.arnold@dfki.de</maintainer>
+    <author>Sascha Arnold/sascha.arnold@dfki.de</author>
     <author>Jakob Schwendner/jakob.schwendner@dfki.de</author>
     <depend package="slam/hogman" />
     <depend package="base/types" />
