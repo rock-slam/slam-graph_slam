@@ -148,6 +148,8 @@ public:
      * @param spinv (optional) combined covariance matrix of all vertices
      */
     envire::TransformWithUncertainty getEnvireTransformWithUncertainty(const g2o::OptimizableGraph::Vertex* vertex, const g2o::SparseBlockMatrix<Eigen::MatrixXd>* spinv = 0);
+    
+    void setInitialFootprintRadius(double r) {footprint_radius = r;}
 
     
     /** Sets up a multi-level sureface grid map with the given configuration.
@@ -239,6 +241,7 @@ private:
     
     bool initialized;
     int next_vertex_id;
+    double footprint_radius;
     g2o::HyperGraph::VertexSet vertices_to_add;
     g2o::HyperGraph::EdgeSet edges_to_add;
     GICPConfiguration gicp_config;
