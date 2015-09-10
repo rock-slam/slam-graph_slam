@@ -35,14 +35,8 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
     if(source_vertex == NULL || target_vertex == NULL)
         return false;
     
-    typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
-    typedef typename PCLPointCloud::Ptr PCLPointCloudPtr;
-    PCLPointCloudPtr source_cloud(new PCLPointCloud);
-    PCLPointCloudPtr target_cloud(new PCLPointCloud);
-    envire::Pointcloud* envire_source_cloud = dynamic_cast<envire::Pointcloud*>(source_vertex->getEnvirePointCloud().get());
-    envire::Pointcloud* envire_target_cloud = dynamic_cast<envire::Pointcloud*>(target_vertex->getEnvirePointCloud().get());
-    if(envire_source_cloud == NULL || envire_target_cloud == NULL)
-        return false;
+    if(!source_vertex->hasPointcloudAttached() || !target_vertex->hasPointcloudAttached())
+	return false;
     
     // compute current transformation guess
     Eigen::Isometry3d transfomation_guess = source_vertex->estimate().inverse() * target_vertex->estimate();
@@ -58,16 +52,14 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
     icp.setRotationEpsilon(gicp_config.rotation_epsilon);
 
     // set source cloud
-    vectorToPCLPointCloud(envire_source_cloud->vertices, *source_cloud.get(), gicp_config.point_cloud_density);
-    icp.setInputCloud(source_cloud);
-    
-    // transform target cloud in the source cloud frame
-    std::vector<Eigen::Vector3d> transformed_target_cloud;
-    transformPointCloud(envire_target_cloud->vertices, transformed_target_cloud, transfomation_guess);
-    
+    icp.setInputCloud(source_vertex->getPCLPointCloud());
+
     // set target cloud
-    vectorToPCLPointCloud(transformed_target_cloud, *target_cloud.get());
-    icp.setInputTarget(target_cloud);
+    typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
+    typedef typename PCLPointCloud::Ptr PCLPointCloudPtr;
+    PCLPointCloudPtr transformed_target_cloud(new PCLPointCloud);
+    pcl::transformPointCloud(*target_vertex->getPCLPointCloud(), *transformed_target_cloud, Eigen::Affine3d(transfomation_guess));
+    icp.setInputTarget(transformed_target_cloud);
     
     // Perform the alignment
     pcl::PointCloud<pcl::PointXYZ> cloud_source_registered;

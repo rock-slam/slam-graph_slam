@@ -1,30 +1,45 @@
 #include "vertex_se3_gicp.hpp"
 
 #include <graph_slam/pointcloud_helper.hpp>
+#include <pcl/filters/voxel_grid.h>
 
 namespace graph_slam
 {
     
-VertexSE3_GICP::VertexSE3_GICP() : VertexSE3(), missing_edges_error(0.0), pointcloud_attached(false)
+VertexSE3_GICP::VertexSE3_GICP() : VertexSE3(), missing_edges_error(0.0), pointcloud_attached(false), pcl_cloud(new PCLPointCloud)
 {
-
 }
 
 void VertexSE3_GICP::attachPointCloud(envire::Pointcloud* point_cloud)
 {
     envire_pointcloud.reset(point_cloud);
+    
+    PCLPointCloudPtr pointcloud(new PCLPointCloud);
+    vectorToPCLPointCloud(point_cloud->vertices, *pointcloud.get());
+    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+    voxel_grid.setLeafSize(0.1, 0.1, 0.05);
+    voxel_grid.setDownsampleAllData(true);
+    voxel_grid.setInputCloud(pointcloud);
+    voxel_grid.filter(*pcl_cloud.get());
+    
     pointcloud_attached = true;
 }
 
 void VertexSE3_GICP::detachPointCloud()
 {
     envire_pointcloud.reset();
+    pcl_cloud->clear();
     pointcloud_attached = false;
 }
 
 envire::EnvironmentItem::Ptr VertexSE3_GICP::getEnvirePointCloud() const
 {
     return envire_pointcloud;
+}
+
+VertexSE3_GICP::PCLPointCloudConstPtr VertexSE3_GICP::getPCLPointCloud() const
+{
+    return pcl_cloud;
 }
 
 bool VertexSE3_GICP::getBestEdgeCandidate(VertexSE3_GICP::EdgeCandidate& candidate, int& vertex_id)
