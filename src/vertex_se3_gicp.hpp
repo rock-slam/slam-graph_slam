@@ -4,6 +4,8 @@
 #include <g2o/types/slam3d/vertex_se3.h>
 #include <envire/maps/Pointcloud.hpp>
 #include <base/samples/rigid_body_state.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 
 namespace graph_slam 
 {
@@ -27,12 +29,17 @@ public:
     };
     
     typedef std::map<int, EdgeCandidate> EdgeCandidates;
+    typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
+    typedef typename PCLPointCloud::Ptr PCLPointCloudPtr;
+    typedef typename PCLPointCloud::ConstPtr PCLPointCloudConstPtr;
     
     VertexSE3_GICP();
     void attachPointCloud(envire::Pointcloud* point_cloud);
     void detachPointCloud();
     bool hasPointcloudAttached() const {return pointcloud_attached;};
     envire::EnvironmentItem::Ptr getEnvirePointCloud() const;
+    PCLPointCloudConstPtr getPCLPointCloud() const;
+    
     
     void addEdgeCandidate(int vertex_id, double mahalanobis_distance);
     void removeEdgeCandidate(int vertex_id);
@@ -44,6 +51,7 @@ public:
     const EdgeSearchState& getEdgeSearchState();
     
 protected:
+    PCLPointCloudPtr pcl_cloud;
     envire::EnvironmentItem::Ptr envire_pointcloud;
     EdgeCandidates edge_candidates;
     EdgeSearchState search_state;
