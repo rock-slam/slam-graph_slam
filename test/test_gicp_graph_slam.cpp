@@ -46,7 +46,7 @@ int main()
     optimizer.setAlgorithm(solver);
     optimizer.addParameter(laserInRobotParameter);
 
-    unsigned num_poses = 10;
+    int num_poses = 10;
     
     // setup gicp config
     graph_slam::GICPConfiguration icp_config;

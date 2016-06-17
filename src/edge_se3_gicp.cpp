@@ -52,7 +52,7 @@ bool EdgeSE3_GICP::setMeasurementFromGICP(bool delayed)
     icp.setRotationEpsilon(gicp_config.rotation_epsilon);
 
     // set source cloud
-    icp.setInputCloud(source_vertex->getPCLPointCloud());
+    icp.setInputSource(source_vertex->getPCLPointCloud());
 
     // set target cloud
     typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;

@@ -6,7 +6,7 @@
 namespace graph_slam
 {
     
-VertexSE3_GICP::VertexSE3_GICP() : VertexSE3(), missing_edges_error(0.0), pointcloud_attached(false), pcl_cloud(new PCLPointCloud)
+VertexSE3_GICP::VertexSE3_GICP() : VertexSE3(), pcl_cloud(new PCLPointCloud), missing_edges_error(0.0), pointcloud_attached(false)
 {
 }
 

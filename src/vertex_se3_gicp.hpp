@@ -3,7 +3,7 @@
 
 #include <g2o/types/slam3d/vertex_se3.h>
 #include <envire/maps/Pointcloud.hpp>
-#include <base/samples/rigid_body_state.h>
+#include <base/samples/RigidBodyState.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 

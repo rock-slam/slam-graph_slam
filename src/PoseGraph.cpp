@@ -1,5 +1,5 @@
 #include "PoseGraph.hpp"
-#include <base/logging.h>
+#include <base/Logging.hpp>
 #include "Hogman2Eigen.hpp"
 
 namespace graph_slam 

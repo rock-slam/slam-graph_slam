@@ -134,7 +134,7 @@ void ExtendedSparseOptimizer::updateGICPConfiguration(const GICPConfiguration& g
 
 bool ExtendedSparseOptimizer::setAPrioriMap(const boost::shared_ptr<envire::Environment>& apriori_env)
 {
-    // for now, assume that the map2world transformation ist the same and that the first pointcloud is the fixed one
+    // for now, assume that the map2world transformation is the same and that the first pointcloud is the fixed one
     std::vector<envire::Pointcloud*> pointclouds = apriori_env->getItems<envire::Pointcloud>();
     if(!pointclouds.empty())
     {
@@ -157,7 +157,7 @@ bool ExtendedSparseOptimizer::setAPrioriMap(const boost::shared_ptr<envire::Envi
         if(is_nan(inital_transform.getTransform().matrix()))
             return false;
 
-        // create inital vertex
+        // create initial vertex
         graph_slam::VertexSE3_GICP* first_vertex = new graph_slam::VertexSE3_GICP();
         first_vertex->setId(next_vertex_id);
         first_vertex->setFixed(true);

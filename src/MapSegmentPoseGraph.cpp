@@ -74,7 +74,7 @@ namespace graph_slam
 
 	void associate( SensorMaps *maps, std::vector<envire::TransformWithUncertainty>& constraints )
 	{
-	    MapSegmentSensorMaps *sma = this, *smb = dynamic_cast<MapSegmentSensorMaps*>(maps);
+	    MapSegmentSensorMaps  /*  *sma = this, */ *smb = dynamic_cast<MapSegmentSensorMaps*>(maps);
 	    assert( smb );
 	    // TODO
 

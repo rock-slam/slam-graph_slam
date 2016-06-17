@@ -2,7 +2,7 @@
 #define GRAPH_SLAM_EXTENDED_SPARSE_OPTIMIZER_HPP
 
 #include <g2o/core/sparse_optimizer.h>
-#include <base/samples/rigid_body_state.h>
+#include <base/samples/RigidBodyState.hpp>
 #include <graph_slam/edge_se3_gicp.hpp>
 #include <graph_slam/matrix_helper.hpp>
 #include <graph_slam/vertex_grid.hpp>
@@ -152,7 +152,7 @@ public:
     void setInitialFootprintRadius(double r) {footprint_radius = r;}
 
     
-    /** Sets up a multi-level sureface grid map with the given configuration.
+    /** Sets up a multi-level surface grid map with the given configuration.
      * All measurements are projected in this map. On default configuration
      * the MLS map is not used.
      * 
@@ -170,7 +170,7 @@ public:
 				double grid_size_x, double grid_size_y, double cell_resolution_x, double cell_resolution_y, double min_z, double max_z);
     
     /** Updates the transformations of all pointclouds in envire and 
-     * project them to the multi-level sureface map.
+     * project them to the multi-level surface map.
      */
     bool updateEnvire();
     
