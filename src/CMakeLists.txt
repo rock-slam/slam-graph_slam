@@ -28,8 +28,9 @@ rock_library(graph_slam
         vertex_grid.hpp
         graph_slam_config.hpp
     DEPS_PKGCONFIG 
-        pcl_registration-1.8 envire base-types hogman stereo g2o
+        envire base-types hogman stereo g2o
     DEPS_CMAKE
         CSparse Cholmod BLAS LAPACK
+        PCL
     )
 
