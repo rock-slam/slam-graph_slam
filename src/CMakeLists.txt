@@ -1,3 +1,5 @@
+
+find_package(PCL 1.7 REQUIRED COMPONENTS registration)
 rock_library(graph_slam
     SOURCES 
         VisualPoseGraph.cpp 
@@ -28,9 +30,8 @@ rock_library(graph_slam
         vertex_grid.hpp
         graph_slam_config.hpp
     DEPS_PKGCONFIG 
-        envire base-types hogman stereo g2o
+        envire base-types hogman stereo g2o pcl_registration-${PCL_VERSION_MAJOR}.${PCL_VERSION_MINOR}
     DEPS_CMAKE
         CSparse Cholmod BLAS LAPACK
-        PCL
     )
 
